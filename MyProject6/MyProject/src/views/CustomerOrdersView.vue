@@ -1,0 +1,341 @@
+<template>
+  <div class="customer-orders">
+    <section class="card">
+      <h2 class="section-title">Customer Orders</h2>
+      <div class="filter-bar">
+        <input
+          v-model="filters.orderNumber"
+          class="form-input customer-orders__filter-input"
+          placeholder="Order Number"
+          @input="applyFilters"
+        />
+        <input
+          v-model="filters.customerName"
+          class="form-input customer-orders__filter-input"
+          placeholder="Customer Name"
+          @input="applyFilters"
+        />
+        <select v-model="filters.status" class="filter-pill customer-orders__filter-picker" @change="applyFilters">
+          <option value="">Status: All</option>
+          <option value="pending">Pending</option>
+          <option value="processing">Processing</option>
+          <option value="shipped">Shipped</option>
+          <option value="completed">Completed</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+        <input
+          v-model="filters.startDate"
+          class="filter-pill customer-orders__filter-input"
+          type="date"
+          placeholder="Start Date"
+          @change="applyFilters"
+        />
+        <input
+          v-model="filters.endDate"
+          class="filter-pill customer-orders__filter-input"
+          type="date"
+          placeholder="End Date"
+          @change="applyFilters"
+        />
+      </div>
+    </section>
+
+    <section class="card">
+      <h2 class="section-title">Order List</h2>
+      <div v-if="isLoading" class="empty">Loading orders...</div>
+      <div v-else-if="!filteredOrders.length" class="empty">No orders found</div>
+      <div v-else class="customer-orders__table">
+        <div class="customer-orders__table-header">
+          <span class="col col-wide">Order Info</span>
+          <span class="col">Customer</span>
+          <span class="col">Amount</span>
+          <span class="col">Status</span>
+          <span class="col">Date</span>
+        </div>
+        <div
+          v-for="order in filteredOrders"
+          :key="order.id"
+          class="customer-orders__table-row"
+          :class="{ 'customer-orders__table-row--active': selectedOrder && selectedOrder.id === order.id }"
+          @click="selectOrder(order)"
+        >
+          <div class="col col-wide">
+            <div class="customer-orders__order-name">{{ order.orderNumber || order.id }}</div>
+            <div class="customer-orders__order-meta">
+              Items: {{ order.items ? order.items.length : 0 }} | Total: ${{ order.totalAmount || order.amount }}
+            </div>
+          </div>
+          <span class="col">{{ order.customerName || order.customer }}</span>
+          <span class="col">${{ order.totalAmount || order.amount }}</span>
+          <span class="col"><span class="tag" :class="order.statusClass">{{ order.statusLabel }}</span></span>
+          <span class="col">{{ formatDate(order.createTime || order.createdAt) }}</span>
+        </div>
+      </div>
+    </section>
+
+    <section v-if="selectedOrder" class="card">
+      <h2 class="section-title">Order Details</h2>
+      <div class="customer-orders__detail">
+        <div class="customer-orders__detail-section">
+          <h3>Order Information</h3>
+          <div class="list">
+            <div class="list-item">
+              <span>Order Number:</span>
+              <span>{{ selectedOrder.orderNumber || selectedOrder.id }}</span>
+            </div>
+            <div class="list-item">
+              <span>Customer:</span>
+              <span>{{ selectedOrder.customerName || selectedOrder.customer }}</span>
+            </div>
+            <div class="list-item">
+              <span>Order Date:</span>
+              <span>{{ formatDateTime(selectedOrder.createTime || selectedOrder.createdAt) }}</span>
+            </div>
+            <div class="list-item">
+              <span>Status:</span>
+              <span class="tag" :class="selectedOrder.statusClass">{{ selectedOrder.statusLabel }}</span>
+            </div>
+            <div class="list-item">
+              <span>Total Amount:</span>
+              <span>${{ selectedOrder.totalAmount || selectedOrder.amount }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="selectedOrder.items && selectedOrder.items.length > 0" class="customer-orders__detail-section">
+          <h3>Products</h3>
+          <div class="list">
+            <div v-for="(item, idx) in selectedOrder.items" :key="idx" class="list-item customer-orders__product-item">
+              <div class="customer-orders__product-header">
+                <span style="font-size: 24px; margin-right: 8px;">{{ getItemIcon(item.productName || item.name) }}</span>
+                <span style="font-weight: 600;">{{ item.productName || item.name }}</span>
+              </div>
+              <div class="customer-orders__product-body">
+                <span v-if="item.color">Color: {{ item.color }}</span>
+                <span v-if="item.size">Size: {{ item.size }}</span>
+                <span>Quantity: {{ item.quantity }}</span>
+                <span>Price: ${{ item.price }}</span>
+                <span>Subtotal: ${{ (item.price * item.quantity).toFixed(2) }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="selectedOrder.shippingAddress" class="customer-orders__detail-section">
+          <h3>Shipping Address</h3>
+          <div class="list">
+            <div class="list-item">
+              <span>Recipient: {{ selectedOrder.shippingAddress.name }}</span>
+              <span>Phone: {{ selectedOrder.shippingAddress.phone }}</span>
+            </div>
+            <div class="list-item">
+              <span>{{ selectedOrder.shippingAddress.street }}, {{ selectedOrder.shippingAddress.city }}, {{ selectedOrder.shippingAddress.state }} {{ selectedOrder.shippingAddress.zipCode }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</template>
+
+<script setup>
+import { reactive, ref, computed, onMounted } from 'vue';
+import { fetchOrders } from '../services/orderService';
+
+const filters = reactive({
+  orderNumber: '',
+  customerName: '',
+  status: '',
+  startDate: '',
+  endDate: ''
+});
+
+const orders = ref([]);
+const isLoading = ref(false);
+const selectedOrder = ref(null);
+
+const statusLabelMap = {
+  pending: 'Pending',
+  processing: 'Processing',
+  shipped: 'Shipped',
+  completed: 'Completed',
+  cancelled: 'Cancelled',
+  returned: 'Returned'
+};
+
+const statusClassMap = {
+  pending: 'warning',
+  processing: 'info',
+  shipped: 'info',
+  completed: 'success',
+  cancelled: 'danger',
+  returned: 'danger'
+};
+
+const mapOrder = (order) => ({
+  ...order,
+  statusLabel: order.statusLabel || statusLabelMap[order.status] || order.status,
+  statusClass: statusClassMap[order.status] || 'default'
+});
+
+const filteredOrders = computed(() => {
+  return orders.value.filter((order) => {
+    const matchOrderNumber = !filters.orderNumber || (order.orderNumber || order.id).toLowerCase().includes(filters.orderNumber.toLowerCase());
+    const matchCustomer = !filters.customerName || (order.customerName || order.customer || '').toLowerCase().includes(filters.customerName.toLowerCase());
+    const matchStatus = !filters.status || order.status === filters.status;
+    const orderDate = new Date(order.createTime || order.createdAt);
+    const matchStartDate = !filters.startDate || orderDate >= new Date(filters.startDate);
+    const matchEndDate = !filters.endDate || orderDate <= new Date(filters.endDate + 'T23:59:59');
+    return matchOrderNumber && matchCustomer && matchStatus && matchStartDate && matchEndDate;
+  });
+});
+
+const loadOrders = async () => {
+  isLoading.value = true;
+  try {
+    const data = await fetchOrders();
+    orders.value = data.map(mapOrder);
+    if (orders.value.length > 0 && !selectedOrder.value) {
+      selectedOrder.value = orders.value[0];
+    }
+  } catch (error) {
+    console.error('Failed to load orders:', error);
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+const applyFilters = () => {
+  // Filters are applied via computed property
+};
+
+const selectOrder = (order) => {
+  selectedOrder.value = order;
+};
+
+const formatDate = (value) => {
+  if (!value) return '--';
+  return new Date(value).toLocaleDateString('en-US');
+};
+
+const formatDateTime = (value) => {
+  if (!value) return '--';
+  return new Date(value).toLocaleString('en-US', { hour12: false });
+};
+
+const getItemIcon = (productName) => {
+  if (!productName) return '📦';
+  const name = productName.toLowerCase();
+  if (name.includes('shirt') || name.includes('t-shirt')) return '👕';
+  if (name.includes('jeans') || name.includes('pants') || name.includes('jogger')) return '👖';
+  if (name.includes('sweatshirt') || name.includes('hood')) return '🧥';
+  if (name.includes('polo')) return '👔';
+  return '📦';
+};
+
+onMounted(() => {
+  loadOrders();
+});
+</script>
+
+<style scoped>
+.customer-orders {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 24px;
+}
+
+.customer-orders__filter-input {
+  flex: 1;
+  min-width: 180px;
+}
+
+.customer-orders__filter-picker {
+  min-width: 160px;
+}
+
+.customer-orders__table {
+  display: flex;
+  flex-direction: column;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+}
+
+.customer-orders__table-header,
+.customer-orders__table-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
+  gap: 12px;
+  padding: 16px 20px;
+  align-items: center;
+}
+
+.customer-orders__table-header {
+  background-color: var(--color-surface-alt);
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.customer-orders__table-row {
+  border-top: 1px solid var(--color-border);
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.customer-orders__table-row:hover {
+  background-color: rgba(43, 181, 192, 0.08);
+}
+
+.customer-orders__table-row--active {
+  background-color: rgba(43, 181, 192, 0.12);
+}
+
+.customer-orders__order-name {
+  font-weight: 600;
+}
+
+.customer-orders__order-meta {
+  margin-top: 4px;
+  color: #9ca3af;
+  font-size: 13px;
+}
+
+.customer-orders__detail {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.customer-orders__detail-section h3 {
+  margin: 0 0 12px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.customer-orders__product-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.customer-orders__product-header {
+  display: flex;
+  align-items: center;
+  font-size: 16px;
+}
+
+.customer-orders__product-body {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 14px;
+  color: var(--color-text-muted);
+}
+
+@media (max-width: 960px) {
+  .customer-orders {
+    grid-template-columns: 1fr;
+  }
+}
+</style>

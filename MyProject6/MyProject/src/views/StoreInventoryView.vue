@@ -1,0 +1,308 @@
+<template>
+  <div class="store-inventory">
+    <section class="card">
+      <h2 class="section-title">Store Inventory</h2>
+      <div class="filter-bar">
+        <input
+          v-model="filters.sku"
+          class="form-input store-inventory__filter-input"
+          placeholder="Product ID"
+          @input="applyFilters"
+        />
+        <input
+          v-model="filters.name"
+          class="form-input store-inventory__filter-input"
+          placeholder="Product Name"
+          @input="applyFilters"
+        />
+        <select v-model="filters.store" class="filter-pill store-inventory__filter-picker" @change="applyFilters">
+          <option value="">Store: All</option>
+          <option v-for="store in stores" :key="store" :value="store">
+            Store: {{ store }}
+          </option>
+        </select>
+        <select v-model="filters.status" class="filter-pill store-inventory__filter-picker" @change="applyFilters">
+          <option value="">Status: All</option>
+          <option value="Normal">Normal</option>
+          <option value="Low Stock">Low Stock</option>
+          <option value="Out of Stock">Out of Stock</option>
+        </select>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2 class="section-title">Inventory List</h2>
+      <div class="store-inventory__table">
+        <div class="store-inventory__table-header">
+          <span class="col col-wide">Product</span>
+          <span class="col">Store</span>
+          <span class="col">Total Stock</span>
+          <span class="col">Available</span>
+          <span class="col">Alert</span>
+        </div>
+        <div
+          v-for="item in filteredInventory"
+          :key="item.sku"
+          class="store-inventory__table-row"
+          :class="{ 'store-inventory__table-row--active': selectedItem?.sku === item.sku }"
+          @click="selectItem(item)"
+        >
+          <div class="col col-wide">
+            <div class="store-inventory__item-name">
+              <span style="font-size: 20px; margin-right: 8px;">{{ item.icon || '📦' }}</span>
+              {{ item.name }}
+            </div>
+            <div class="store-inventory__item-meta">SKU: {{ item.sku }} | Price: ${{ item.price }}</div>
+          </div>
+          <span class="col">{{ item.store }}</span>
+          <span class="col">{{ item.total }}</span>
+          <span class="col">{{ item.available }}</span>
+          <span class="col"><span class="tag" :class="item.warningLevel">{{ item.warningLabel }}</span></span>
+        </div>
+      </div>
+    </section>
+
+    <section v-if="selectedItem" class="card">
+      <h2 class="section-title">Inventory Details</h2>
+      <div class="list">
+        <div class="list-item store-inventory__detail-item">
+          <span>Price: ${{ selectedItem.price }}</span>
+          <span>Location: {{ selectedItem.location }}</span>
+        </div>
+        <div class="list-item store-inventory__detail-item">
+          <span>Safety Stock: {{ selectedItem.threshold }}</span>
+          <span>Last Inbound: {{ selectedItem.lastInDate }}</span>
+        </div>
+        <div v-if="selectedItem.colors && selectedItem.colors.length > 0" class="list-item">
+          <span>Available Colors: {{ selectedItem.colors.join(', ') }}</span>
+        </div>
+        <div v-if="selectedItem.sizes && selectedItem.sizes.length > 0" class="list-item">
+          <span>Available Sizes: {{ selectedItem.sizes.join(', ') }}</span>
+        </div>
+        <div class="list-item">
+          <span>Restock Suggestion: {{ selectedItem.restockAdvice }}</span>
+        </div>
+      </div>
+    </section>
+  </div>
+</template>
+
+<script setup>
+import { reactive, ref, computed } from 'vue';
+
+const stores = ['Store A - Downtown', 'Store B - Shopping Mall', 'Store C - Airport'];
+
+const inventory = reactive([
+  {
+    sku: 'PROD-001',
+    name: 'Casual T-Shirt',
+    spec: 'S/M/L/XL',
+    total: 120,
+    available: 98,
+    threshold: 80,
+    warningLevel: 'default',
+    warningLabel: 'Normal',
+    store: 'Store A - Downtown',
+    location: 'A区-03-05',
+    lastInDate: '2024-01-12',
+    restockAdvice: 'No restock needed',
+    colors: ['Black', 'White', 'Blue', 'Red', 'Gray'],
+    sizes: ['S', 'M', 'L', 'XL'],
+    price: 29.99,
+    icon: '👕'
+  },
+  {
+    sku: 'PROD-002',
+    name: 'Classic Denim Jeans',
+    spec: '28/30/32/34/36',
+    total: 85,
+    available: 65,
+    threshold: 50,
+    warningLevel: 'warning',
+    warningLabel: 'Low Stock',
+    store: 'Store B - Shopping Mall',
+    location: 'B区-01-02',
+    lastInDate: '2024-01-09',
+    restockAdvice: 'Suggest restock 20 pieces',
+    colors: ['Blue', 'Black', 'Gray'],
+    sizes: ['28', '30', '32', '34', '36'],
+    price: 59.99,
+    icon: '👖'
+  },
+  {
+    sku: 'PROD-003',
+    name: 'Hooded Sweatshirt',
+    spec: 'S/M/L/XL/XXL',
+    total: 45,
+    available: 30,
+    threshold: 50,
+    warningLevel: 'warning',
+    warningLabel: 'Low Stock',
+    store: 'Store A - Downtown',
+    location: 'A区-02-03',
+    lastInDate: '2024-01-10',
+    restockAdvice: 'Suggest restock 25 pieces',
+    colors: ['Black', 'Gray', 'Navy', 'Red'],
+    sizes: ['S', 'M', 'L', 'XL', 'XXL'],
+    price: 49.99,
+    icon: '🧥'
+  },
+  {
+    sku: 'PROD-004',
+    name: 'Chino Pants',
+    spec: '30/32/34/36/38',
+    total: 60,
+    available: 45,
+    threshold: 40,
+    warningLevel: 'default',
+    warningLabel: 'Normal',
+    store: 'Store C - Airport',
+    location: 'C区-02-01',
+    lastInDate: '2024-01-11',
+    restockAdvice: 'No restock needed',
+    colors: ['Khaki', 'Navy', 'Black', 'Olive'],
+    sizes: ['30', '32', '34', '36', '38'],
+    price: 54.99,
+    icon: '👔'
+  },
+  {
+    sku: 'PROD-005',
+    name: 'Polo Shirt',
+    spec: 'S/M/L/XL',
+    total: 90,
+    available: 75,
+    threshold: 60,
+    warningLevel: 'default',
+    warningLabel: 'Normal',
+    store: 'Store B - Shopping Mall',
+    location: 'B区-01-04',
+    lastInDate: '2024-01-13',
+    restockAdvice: 'No restock needed',
+    colors: ['White', 'Black', 'Navy', 'Green', 'Red'],
+    sizes: ['S', 'M', 'L', 'XL'],
+    price: 39.99,
+    icon: '👔'
+  },
+  {
+    sku: 'PROD-006',
+    name: 'Jogger Pants',
+    spec: 'S/M/L/XL',
+    total: 12,
+    available: 5,
+    threshold: 25,
+    warningLevel: 'danger',
+    warningLabel: 'Out of Stock',
+    store: 'Store A - Downtown',
+    location: 'A区-04-01',
+    lastInDate: '2024-01-05',
+    restockAdvice: 'Restock immediately 30 pieces',
+    colors: ['Black', 'Gray', 'Navy', 'Olive'],
+    sizes: ['S', 'M', 'L', 'XL'],
+    price: 44.99,
+    icon: '👖'
+  }
+]);
+
+const filters = reactive({
+  sku: '',
+  name: '',
+  store: '',
+  status: ''
+});
+
+const filteredInventory = ref([...inventory]);
+const selectedItem = ref(filteredInventory.value[0] || null);
+
+const applyFilters = () => {
+  filteredInventory.value = inventory.filter((item) => {
+    const matchSku = !filters.sku || item.sku.toLowerCase().includes(filters.sku.toLowerCase());
+    const matchName = !filters.name || item.name.includes(filters.name);
+    const matchStore = !filters.store || item.store === filters.store;
+    const matchStatus = !filters.status || item.warningLabel === filters.status;
+    return matchSku && matchName && matchStore && matchStatus;
+  });
+  selectedItem.value = filteredInventory.value[0] || null;
+};
+
+const selectItem = (item) => {
+  selectedItem.value = item;
+};
+
+applyFilters();
+</script>
+
+<style scoped>
+.store-inventory {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 24px;
+}
+
+.store-inventory__filter-input {
+  flex: 1;
+  min-width: 220px;
+}
+
+.store-inventory__filter-picker {
+  min-width: 180px;
+}
+
+.store-inventory__table {
+  display: flex;
+  flex-direction: column;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+}
+
+.store-inventory__table-header,
+.store-inventory__table-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
+  gap: 12px;
+  padding: 16px 20px;
+  align-items: center;
+}
+
+.store-inventory__table-header {
+  background-color: var(--color-surface-alt);
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.store-inventory__table-row {
+  border-top: 1px solid var(--color-border);
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.store-inventory__table-row:hover {
+  background-color: rgba(43, 181, 192, 0.08);
+}
+
+.store-inventory__table-row--active {
+  background-color: rgba(43, 181, 192, 0.12);
+}
+
+.store-inventory__item-name {
+  font-weight: 600;
+}
+
+.store-inventory__item-meta {
+  margin-top: 4px;
+  color: #9ca3af;
+  font-size: 13px;
+}
+
+.store-inventory__detail-item {
+  display: flex;
+  justify-content: space-between;
+}
+
+@media (max-width: 960px) {
+  .store-inventory {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
+
