@@ -10,26 +10,122 @@
     </div>
 
     <div v-else class="checkout__content">
-      <!-- Order Summary -->
-      <div class="checkout__section">
-        <h2 class="checkout__section-title">Order Summary</h2>
-        <div class="order-summary">
-          <div v-for="item in cartItems" :key="item.cartId" class="order-summary__item">
-            <div class="order-summary__item-info">
-              <div class="order-summary__item-icon">{{ item.icon }}</div>
-              <div class="order-summary__item-details">
-                <span class="order-summary__item-name">{{ item.name }}</span>
-                <span class="order-summary__item-spec">
-                  {{ item.color }} / Size {{ item.size }} × {{ item.quantity }}
-                </span>
+      <!-- Left Column: Order Summary -->
+      <div class="checkout__left">
+        <div class="checkout__section">
+          <h2 class="checkout__section-title">Order Summary</h2>
+          <div class="order-summary">
+            <div v-for="item in cartItems" :key="item.cartId" class="order-summary__item">
+              <div class="order-summary__item-info">
+                <div class="order-summary__item-icon">{{ item.icon }}</div>
+                <div class="order-summary__item-details">
+                  <span class="order-summary__item-name">{{ item.name }}</span>
+                  <span class="order-summary__item-spec">
+                    {{ item.color }} / Size {{ item.size }} × {{ item.quantity }}
+                  </span>
+                </div>
               </div>
+              <span class="order-summary__item-price">${{ (item.price * item.quantity).toFixed(2) }}</span>
             </div>
-            <span class="order-summary__item-price">${{ (item.price * item.quantity).toFixed(2) }}</span>
+          </div>
+          <div class="order-summary__total">
+            <span>Total:</span>
+            <span class="order-summary__total-amount">${{ totalAmount.toFixed(2) }}</span>
           </div>
         </div>
-        <div class="order-summary__total">
-          <span>Total:</span>
-          <span class="order-summary__total-amount">${{ totalAmount.toFixed(2) }}</span>
+      </div>
+
+      <!-- Right Column: Payment & Address -->
+      <div class="checkout__right">
+        <!-- Payment Method Section -->
+        <div class="checkout__section">
+        <h2 class="checkout__section-title">Payment Method</h2>
+        <div class="payment-methods">
+          <div
+            v-for="method in paymentMethods"
+            :key="method.id"
+            class="payment-method"
+            :class="{ 'payment-method--selected': selectedPaymentMethod === method.id }"
+            @click="selectedPaymentMethod = method.id"
+          >
+            <div class="payment-method__icon">{{ method.icon }}</div>
+            <div class="payment-method__info">
+              <div class="payment-method__name">{{ method.name }}</div>
+              <div class="payment-method__desc">{{ method.description }}</div>
+            </div>
+            <div class="payment-method__radio">
+              <input
+                type="radio"
+                :id="method.id"
+                :value="method.id"
+                v-model="selectedPaymentMethod"
+              />
+            </div>
+          </div>
+        </div>
+
+        <!-- Credit/Debit Card Form -->
+        <div v-if="selectedPaymentMethod === 'credit' || selectedPaymentMethod === 'debit'" class="payment-form">
+          <h3 class="payment-form__title">Card Information</h3>
+          <div class="form-group">
+            <label class="form-label" for="cardNumber">Card Number *</label>
+            <input
+              id="cardNumber"
+              v-model="paymentForm.cardNumber"
+              class="form-input"
+              placeholder="1234 5678 9012 3456"
+              maxlength="19"
+              @input="formatCardNumber"
+              required
+            />
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="expiryDate">Expiry Date *</label>
+              <input
+                id="expiryDate"
+                v-model="paymentForm.expiryDate"
+                class="form-input"
+                placeholder="MM/YY"
+                maxlength="5"
+                @input="formatExpiryDate"
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="cvv">CVV *</label>
+              <input
+                id="cvv"
+                v-model="paymentForm.cvv"
+                class="form-input"
+                placeholder="123"
+                type="password"
+                maxlength="4"
+                required
+              />
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="cardholderName">Cardholder Name *</label>
+            <input
+              id="cardholderName"
+              v-model="paymentForm.cardholderName"
+              class="form-input"
+              placeholder="John Doe"
+              required
+            />
+          </div>
+        </div>
+
+        <!-- Alipay/WeChat Pay - No additional form needed, just confirmation -->
+        <div v-if="selectedPaymentMethod === 'alipay' || selectedPaymentMethod === 'wechat'" class="payment-form">
+          <div class="payment-qr-info">
+            <div class="payment-qr-info__icon">{{ selectedPaymentMethod === 'alipay' ? '💳' : '💬' }}</div>
+            <p class="payment-qr-info__text">
+              You will be redirected to {{ selectedPaymentMethod === 'alipay' ? 'Alipay' : 'WeChat Pay' }} 
+              payment page after placing the order.
+            </p>
+          </div>
         </div>
       </div>
 
@@ -117,6 +213,7 @@
           </div>
         </form>
       </div>
+      </div>
     </div>
   </div>
 </template>
@@ -134,6 +231,41 @@ const appStore = useAppStore();
 const loading = ref(false);
 const submitting = ref(false);
 const cartItems = ref([]);
+const selectedPaymentMethod = ref('credit');
+
+const paymentMethods = [
+  {
+    id: 'credit',
+    name: 'Credit Card',
+    description: 'Visa, Mastercard, American Express',
+    icon: '💳'
+  },
+  {
+    id: 'debit',
+    name: 'Debit Card',
+    description: 'Bank debit card',
+    icon: '🏦'
+  },
+  {
+    id: 'alipay',
+    name: 'Alipay',
+    description: '支付宝支付',
+    icon: '💰'
+  },
+  {
+    id: 'wechat',
+    name: 'WeChat Pay',
+    description: '微信支付',
+    icon: '💬'
+  }
+];
+
+const paymentForm = reactive({
+  cardNumber: '',
+  expiryDate: '',
+  cvv: '',
+  cardholderName: ''
+});
 
 const addressForm = reactive({
   name: '',
@@ -210,10 +342,47 @@ const goBack = () => {
   router.push('/customer/shop');
 };
 
+const formatCardNumber = (event) => {
+  let value = event.target.value.replace(/\s/g, '');
+  let formattedValue = value.match(/.{1,4}/g)?.join(' ') || value;
+  if (formattedValue.length <= 19) {
+    paymentForm.cardNumber = formattedValue;
+  }
+};
+
+const formatExpiryDate = (event) => {
+  let value = event.target.value.replace(/\D/g, '');
+  if (value.length >= 2) {
+    value = value.substring(0, 2) + '/' + value.substring(2, 4);
+  }
+  paymentForm.expiryDate = value;
+};
+
 const submitOrder = async () => {
   if (cartItems.value.length === 0) {
     window.alert('Your cart is empty');
     return;
+  }
+
+  // Validate payment method
+  if (selectedPaymentMethod.value === 'credit' || selectedPaymentMethod.value === 'debit') {
+    if (!paymentForm.cardNumber || !paymentForm.expiryDate || !paymentForm.cvv || !paymentForm.cardholderName) {
+      window.alert('Please fill in all card information');
+      return;
+    }
+    // Basic validation
+    if (paymentForm.cardNumber.replace(/\s/g, '').length < 13) {
+      window.alert('Please enter a valid card number');
+      return;
+    }
+    if (paymentForm.expiryDate.length !== 5) {
+      window.alert('Please enter a valid expiry date (MM/YY)');
+      return;
+    }
+    if (paymentForm.cvv.length < 3) {
+      window.alert('Please enter a valid CVV');
+      return;
+    }
   }
 
   submitting.value = true;
@@ -237,6 +406,14 @@ const submitOrder = async () => {
         zipCode: addressForm.zipCode,
         notes: addressForm.notes || undefined
       },
+      paymentMethod: selectedPaymentMethod.value,
+      paymentInfo: (selectedPaymentMethod.value === 'credit' || selectedPaymentMethod.value === 'debit') ? {
+        cardNumber: paymentForm.cardNumber.replace(/\s/g, '').slice(-4), // Only store last 4 digits
+        cardType: selectedPaymentMethod.value === 'credit' ? 'Credit Card' : 'Debit Card',
+        cardholderName: paymentForm.cardholderName
+      } : {
+        method: selectedPaymentMethod.value === 'alipay' ? 'Alipay' : 'WeChat Pay'
+      },
       subtotal: totalAmount.value,
       totalAmount: totalAmount.value,
       remark: addressForm.notes || undefined
@@ -249,7 +426,8 @@ const submitOrder = async () => {
     localStorage.removeItem('checkout-cart');
 
     // Show success message and redirect to orders page
-    window.alert(`Order placed successfully! Order #: ${order.orderNumber || order.id}`);
+    const paymentMethodName = paymentMethods.find(m => m.id === selectedPaymentMethod.value)?.name || 'Payment';
+    window.alert(`Order placed successfully with ${paymentMethodName}! Order #: ${order.orderNumber || order.id}`);
     router.push('/customer/orders');
   } catch (error) {
     window.alert('Failed to place order: ' + (error.message || 'Unknown error'));
@@ -295,6 +473,19 @@ const submitOrder = async () => {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 32px;
+  align-items: start;
+}
+
+.checkout__left {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.checkout__right {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
 }
 
 .checkout__section {
@@ -430,13 +621,139 @@ const submitOrder = async () => {
   cursor: not-allowed;
 }
 
+/* Payment Methods */
+.payment-methods {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.payment-method {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: var(--color-surface);
+}
+
+.payment-method:hover {
+  border-color: var(--color-brand);
+  background: rgba(43, 181, 192, 0.05);
+}
+
+.payment-method--selected {
+  border-color: var(--color-brand);
+  background: rgba(43, 181, 192, 0.1);
+  box-shadow: 0 0 0 3px rgba(43, 181, 192, 0.1);
+}
+
+.payment-method__icon {
+  font-size: 32px;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-background);
+  border-radius: 8px;
+}
+
+.payment-method__info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.payment-method__name {
+  font-weight: 600;
+  color: var(--color-text);
+  font-size: 16px;
+}
+
+.payment-method__desc {
+  font-size: 14px;
+  color: var(--color-text-muted);
+}
+
+.payment-method__radio {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.payment-method__radio input[type="radio"] {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  accent-color: var(--color-brand);
+}
+
+/* Payment Form */
+.payment-form {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 2px solid #e5e7eb;
+}
+
+.payment-form__title {
+  margin: 0 0 20px;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.payment-qr-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 32px;
+  background: var(--color-background);
+  border-radius: 12px;
+  text-align: center;
+}
+
+.payment-qr-info__icon {
+  font-size: 64px;
+}
+
+.payment-qr-info__text {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
 @media (max-width: 768px) {
   .checkout__content {
     grid-template-columns: 1fr;
   }
 
+  .checkout__left,
+  .checkout__right {
+    gap: 16px;
+  }
+
   .form-row {
     grid-template-columns: 1fr;
+  }
+
+  .payment-method {
+    padding: 12px;
+  }
+
+  .payment-method__icon {
+    font-size: 24px;
+    width: 40px;
+    height: 40px;
   }
 }
 </style>

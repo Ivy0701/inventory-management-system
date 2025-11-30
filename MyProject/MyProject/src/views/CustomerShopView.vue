@@ -143,7 +143,10 @@
           <div class="cart-modal__total">
             Total: <span class="cart-modal__total-amount">${{ cartTotal }}</span>
           </div>
-          <button class="btn-primary" @click="checkout">Checkout</button>
+          <div class="cart-modal__footer-buttons">
+            <button class="btn-secondary" @click="showCart = false">Continue Shopping</button>
+            <button class="btn-primary" @click="checkout">Checkout</button>
+          </div>
         </div>
       </div>
     </div>
@@ -329,7 +332,8 @@ const addToCartWithVariant = () => {
   }
 
   closeProductModal();
-  showCart.value = true;
+  // Show success message instead of automatically opening cart
+  // User can continue shopping and check cart when ready
 };
 
 const updateQuantity = (cartId, delta) => {
@@ -813,8 +817,18 @@ onMounted(() => {
   padding: 20px 24px;
   border-top: 1px solid #e5e7eb;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cart-modal__footer-buttons {
+  display: flex;
+  gap: 12px;
+}
+
+.cart-modal__footer-buttons .btn-primary,
+.cart-modal__footer-buttons .btn-secondary {
+  flex: 1;
 }
 
 .cart-modal__total {
