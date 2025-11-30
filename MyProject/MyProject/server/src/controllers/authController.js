@@ -83,5 +83,57 @@ export const login = async (req, res, next) => {
   }
 };
 
+export const verifyUserForPasswordReset = async (req, res, next) => {
+  try {
+    const { account, name } = req.body;
+
+    if (!account || !name) {
+      return res.status(400).json({ message: 'Account and name are required' });
+    }
+
+    // Find user by account and name
+    const user = await User.findOne({ account, name });
+    if (!user) {
+      return res.status(404).json({ message: 'Username or name is incorrect, please try again' });
+    }
+
+    // Return success (don't expose user details)
+    res.json({ message: 'Verification successful' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const resetPassword = async (req, res, next) => {
+  try {
+    const { account, newPassword } = req.body;
+
+    if (!account || !newPassword) {
+      return res.status(400).json({ message: 'Account and new password are required' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters' });
+    }
+
+    // Find user by account
+    const user = await User.findOne({ account });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Hash new password
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    
+    // Update password
+    user.passwordHash = passwordHash;
+    await user.save();
+
+    res.json({ message: 'Password reset successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
+
 
 

@@ -229,7 +229,7 @@ const goBack = () => {
 };
 
 const onForgotPassword = () => {
-  window.alert('Please contact administrator to reset password');
+  router.push(`/forgot-password?role=${role.value}`);
 };
 </script>
 

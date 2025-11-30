@@ -10,6 +10,16 @@ export const login = async (payload) => {
   return response.data;
 };
 
+export const verifyUserForPasswordReset = async (payload) => {
+  const response = await apiClient.post('/auth/verify-password-reset', payload);
+  return response.data;
+};
+
+export const resetPassword = async (payload) => {
+  const response = await apiClient.post('/auth/reset-password', payload);
+  return response.data;
+};
+
 
 
 

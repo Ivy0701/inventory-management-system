@@ -51,6 +51,18 @@ const routes = [
     component: () => import('../views/LoginView.vue'),
     meta: { guestOnly: true }
   },
+  {
+    path: '/forgot-password',
+    name: 'ForgotPassword',
+    component: () => import('../views/ForgotPasswordView.vue'),
+    meta: { guestOnly: true }
+  },
+  {
+    path: '/reset-password',
+    name: 'ResetPassword',
+    component: () => import('../views/ResetPasswordView.vue'),
+    meta: { guestOnly: true }
+  },
   // 员工端登录（销售员/仓库管理员）
   {
     path: '/staff/login',
