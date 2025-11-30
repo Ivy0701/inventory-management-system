@@ -133,6 +133,43 @@
             </div>
           </div>
         </div>
+
+        <div v-if="selectedOrder.timeline && selectedOrder.timeline.length > 0" class="customer-orders__detail-section">
+          <h3>Order Timeline</h3>
+          <div class="timeline">
+            <div v-for="(step, idx) in selectedOrder.timeline" :key="idx" class="timeline-item">
+              <span class="timeline-dot" />
+              <div class="timeline-content">
+                <span class="timeline-title">{{ step.title }}</span>
+                <span class="timeline-time">{{ formatDateTime(step.time) }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="showActions" class="customer-orders__actions">
+          <!-- Sales staff: Ship order button (when status is processing) -->
+          <button
+            v-if="isSalesStaff && selectedOrder.status === 'processing'"
+            class="btn-primary"
+            type="button"
+            :disabled="isProcessing"
+            @click="handleShipOrder"
+          >
+            {{ isProcessing ? 'Shipping...' : 'Ship Order' }}
+          </button>
+          
+          <!-- Customer: Confirm receipt button (when status is shipped) -->
+          <button
+            v-if="isCustomer && selectedOrder.status === 'shipped'"
+            class="btn-primary"
+            type="button"
+            :disabled="isProcessing"
+            @click="handleConfirmReceipt"
+          >
+            {{ isProcessing ? 'Confirming...' : 'Confirm Receipt' }}
+          </button>
+        </div>
       </div>
     </section>
   </div>
@@ -140,7 +177,10 @@
 
 <script setup>
 import { reactive, ref, computed, onMounted } from 'vue';
-import { fetchOrders } from '../services/orderService';
+import { fetchOrders, shipOrder, confirmOrderReceipt } from '../services/orderService';
+import { useAppStore } from '../store/appStore';
+
+const appStore = useAppStore();
 
 const filters = reactive({
   orderNumber: '',
@@ -152,7 +192,19 @@ const filters = reactive({
 
 const orders = ref([]);
 const isLoading = ref(false);
+const isProcessing = ref(false);
 const selectedOrder = ref(null);
+
+// Check user role
+const isSalesStaff = computed(() => appStore.user.role === 'sales');
+const isCustomer = computed(() => appStore.user.role === 'customer');
+
+// Show actions if there are available actions for current user and order status
+const showActions = computed(() => {
+  if (!selectedOrder.value) return false;
+  return (isSalesStaff.value && selectedOrder.value.status === 'processing') ||
+         (isCustomer.value && selectedOrder.value.status === 'shipped');
+});
 
 const statusLabelMap = {
   pending: 'Pending',
@@ -231,6 +283,54 @@ const getItemIcon = (productName) => {
   if (name.includes('sweatshirt') || name.includes('hood')) return '🧥';
   if (name.includes('polo')) return '👔';
   return '📦';
+};
+
+const handleShipOrder = async () => {
+  if (!selectedOrder.value) return;
+  
+  if (!window.confirm('Are you sure you want to ship this order? The order status will change to "Shipped".')) {
+    return;
+  }
+  
+  isProcessing.value = true;
+  try {
+    const updatedOrder = await shipOrder(selectedOrder.value.id);
+    // Update the order in the list
+    const orderIndex = orders.value.findIndex(o => o.id === selectedOrder.value.id);
+    if (orderIndex !== -1) {
+      orders.value[orderIndex] = mapOrder(updatedOrder);
+      selectedOrder.value = mapOrder(updatedOrder);
+    }
+    window.alert('Order has been shipped successfully!');
+  } catch (error) {
+    window.alert('Failed to ship order: ' + (error.message || 'Unknown error'));
+  } finally {
+    isProcessing.value = false;
+  }
+};
+
+const handleConfirmReceipt = async () => {
+  if (!selectedOrder.value) return;
+  
+  if (!window.confirm('Are you sure you have received this order? The order status will change to "Completed".')) {
+    return;
+  }
+  
+  isProcessing.value = true;
+  try {
+    const updatedOrder = await confirmOrderReceipt(selectedOrder.value.id);
+    // Update the order in the list
+    const orderIndex = orders.value.findIndex(o => o.id === selectedOrder.value.id);
+    if (orderIndex !== -1) {
+      orders.value[orderIndex] = mapOrder(updatedOrder);
+      selectedOrder.value = mapOrder(updatedOrder);
+    }
+    window.alert('Order receipt confirmed successfully!');
+  } catch (error) {
+    window.alert('Failed to confirm receipt: ' + (error.message || 'Unknown error'));
+  } finally {
+    isProcessing.value = false;
+  }
 };
 
 onMounted(() => {
@@ -331,6 +431,56 @@ onMounted(() => {
   flex-wrap: wrap;
   font-size: 14px;
   color: var(--color-text-muted);
+}
+
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.timeline-item {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.timeline-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: var(--color-brand);
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+
+.timeline-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.timeline-title {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.timeline-time {
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.customer-orders__actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--color-border);
+}
+
+.customer-orders__actions .btn-primary {
+  min-width: 160px;
 }
 
 @media (max-width: 960px) {

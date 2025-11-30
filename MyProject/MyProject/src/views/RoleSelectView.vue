@@ -31,13 +31,21 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAppStore } from '../store/appStore';
 
 const router = useRouter();
 const appStore = useAppStore();
 const selectedRole = ref(null);
+
+// 当进入角色选择页面时，如果用户未登录，清除所有存储的角色信息
+onMounted(() => {
+  if (!appStore.auth.isAuthenticated) {
+    appStore.selectedRole = null;
+    window.sessionStorage.removeItem('selectedRole');
+  }
+});
 const roleCards = [
   {
     role: 'customer',

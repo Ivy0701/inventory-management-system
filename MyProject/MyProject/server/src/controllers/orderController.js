@@ -246,3 +246,37 @@ export const cancelOrder = async (req, res, next) => {
   }
 };
 
+export const shipOrder = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const user = req.user;
+
+    if (!user) {
+      return res.status(401).json({ message: 'Login required' });
+    }
+
+    // Only sales staff can ship orders
+    if (user.role !== 'sales') {
+      return res.status(403).json({ message: 'Only sales staff can ship orders' });
+    }
+
+    const order = await Order.findById(id);
+    if (!order) {
+      return res.status(404).json({ message: 'Order does not exist' });
+    }
+
+    // Only processing orders can be shipped
+    if (order.status !== 'processing') {
+      return res.status(400).json({ message: 'Only processing orders can be shipped' });
+    }
+
+    order.status = 'shipped';
+    order.timeline.push({ title: 'Order Shipped', time: new Date() });
+    await order.save();
+
+    res.json(mapOrderResponse(order));
+  } catch (error) {
+    next(error);
+  }
+};
+

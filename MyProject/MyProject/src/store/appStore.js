@@ -111,10 +111,10 @@ export const useAppStore = defineStore('app', {
       if (user.role) {
         this.selectedRole = user.role;
       }
-      window.localStorage.setItem('app-auth', JSON.stringify({ user, token }));
+      window.sessionStorage.setItem('app-auth', JSON.stringify({ user, token }));
     },
     hydrateFromStorage() {
-      const stored = window.localStorage.getItem('app-auth');
+      const stored = window.sessionStorage.getItem('app-auth');
       if (stored) {
         const { user, token } = JSON.parse(stored);
         if (user && token) {
@@ -132,7 +132,9 @@ export const useAppStore = defineStore('app', {
       this.user = getDefaultUser();
       this.auth.isAuthenticated = false;
       this.auth.token = null;
-      window.localStorage.removeItem('app-auth');
+      this.selectedRole = null;
+      window.sessionStorage.removeItem('app-auth');
+      window.sessionStorage.removeItem('selectedRole');
     }
   }
 });
