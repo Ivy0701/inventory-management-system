@@ -217,7 +217,8 @@ const statusLabelMap = {
   shipped: 'Shipped',
   completed: 'Completed',
   cancelled: 'Cancelled',
-  returned: 'Returned'
+  returned: 'Returned',
+  after_sales_processing: '售后处理中'
 };
 
 const statusClassMap = {
@@ -226,7 +227,8 @@ const statusClassMap = {
   shipped: 'info',
   completed: 'success',
   cancelled: 'danger',
-  returned: 'danger'
+  returned: 'danger',
+  after_sales_processing: 'info'
 };
 
 const newOrder = reactive({

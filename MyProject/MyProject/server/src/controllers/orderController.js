@@ -1,4 +1,5 @@
 import Order from '../models/Order.js';
+import { decreaseInventory, increaseInventory } from './inventoryController.js';
 
 const statusLabelMap = {
   pending: 'Pending',
@@ -6,7 +7,8 @@ const statusLabelMap = {
   shipped: 'Shipped',
   completed: 'Completed',
   cancelled: 'Cancelled',
-  returned: 'Returned'
+  returned: 'Returned',
+  after_sales_processing: 'After-sales Processing'
 };
 
 const generateOrderNumber = () => {
@@ -34,6 +36,7 @@ const mapOrderResponse = (order) => ({
   inventoryStatus: order.inventoryStatus,
   status: order.status,
   statusLabel: statusLabelMap[order.status] || order.status,
+  afterSales: order.afterSales,
   timeline: order.timeline,
   createTime: order.createdAt ? new Date(order.createdAt).toLocaleString('en-US') : '',
   createdAt: order.createdAt,
@@ -153,9 +156,11 @@ export const confirmOrderReceipt = async (req, res, next) => {
   }
 };
 
+// Customer applies for after-sales (exchange / refund)
 export const returnOrder = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const { type, reason } = req.body;
     const customerId = req.user?.id || req.user?._id;
 
     const order = await Order.findById(id);
@@ -169,13 +174,117 @@ export const returnOrder = async (req, res, next) => {
     }
 
     if (!['shipped', 'completed'].includes(order.status)) {
-      return res.status(400).json({ message: 'Only shipped or completed orders can apply for return' });
+      return res.status(400).json({ message: 'Only shipped or completed orders can apply for after-sales' });
     }
 
-    order.status = 'returned';
-    order.timeline.push({ title: 'Return Requested', time: new Date() });
+    if (!type || !['exchange', 'refund'].includes(type)) {
+      return res.status(400).json({ message: 'Invalid after-sales type' });
+    }
+
+    if (!reason || !reason.trim()) {
+      return res.status(400).json({ message: 'After-sales reason is required' });
+    }
+
+    order.afterSales = {
+      type,
+      reason: reason.trim(),
+      status: 'pending',
+      createdAt: new Date()
+    };
+    order.status = 'after_sales_processing';
+    order.timeline.push({ title: 'After-sales Requested', time: new Date() });
     await order.save();
 
+    res.json(mapOrderResponse(order));
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Sales staff approves after-sales request
+export const approveAfterSales = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const user = req.user;
+
+    if (!user) {
+      return res.status(401).json({ message: 'Login required' });
+    }
+
+    if (user.role !== 'sales') {
+      return res.status(403).json({ message: 'Only sales staff can process after-sales requests' });
+    }
+
+    const order = await Order.findById(id);
+    if (!order) {
+      return res.status(404).json({ message: 'Order does not exist' });
+    }
+
+    if (!order.afterSales || order.afterSales.status !== 'pending') {
+      return res.status(400).json({ message: 'No pending after-sales request for this order' });
+    }
+
+    // Increase inventory for each item in the order (only for refund type, exchange doesn't change inventory)
+    if (order.afterSales.type === 'refund') {
+      try {
+        for (const item of order.items) {
+          console.log(`Increasing inventory: productId=${item.productId}, quantity=${item.quantity}`);
+          await increaseInventory(item.productId, item.quantity);
+          console.log(`Inventory increased successfully for product ${item.productId}`);
+        }
+      } catch (inventoryError) {
+        console.error('Inventory update error:', inventoryError);
+        return res.status(400).json({ message: inventoryError.message || 'Failed to update inventory' });
+      }
+    }
+
+    order.afterSales.status = 'approved';
+    order.afterSales.processedAt = new Date();
+    // For simplicity, mark order as returned after after-sales approved
+    order.status = 'returned';
+    order.timeline.push({ title: 'After-sales Approved', time: new Date() });
+
+    await order.save();
+    res.json(mapOrderResponse(order));
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Sales staff rejects after-sales request
+export const rejectAfterSales = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+    const user = req.user;
+
+    if (!user) {
+      return res.status(401).json({ message: 'Login required' });
+    }
+
+    if (user.role !== 'sales') {
+      return res.status(403).json({ message: 'Only sales staff can process after-sales requests' });
+    }
+
+    const order = await Order.findById(id);
+    if (!order) {
+      return res.status(404).json({ message: 'Order does not exist' });
+    }
+
+    if (!order.afterSales || order.afterSales.status !== 'pending') {
+      return res.status(400).json({ message: 'No pending after-sales request for this order' });
+    }
+
+    if (!reason || !reason.trim()) {
+      return res.status(400).json({ message: 'Rejection reason is required' });
+    }
+
+    order.afterSales.status = 'rejected';
+    order.afterSales.processedAt = new Date();
+    // Keep original status but record rejection in timeline
+    order.timeline.push({ title: 'After-sales Rejected', time: new Date() });
+
+    await order.save();
     res.json(mapOrderResponse(order));
   } catch (error) {
     next(error);
@@ -268,6 +377,18 @@ export const shipOrder = async (req, res, next) => {
     // Only processing orders can be shipped
     if (order.status !== 'processing') {
       return res.status(400).json({ message: 'Only processing orders can be shipped' });
+    }
+
+    // Decrease inventory for each item in the order
+    try {
+      for (const item of order.items) {
+        console.log(`Decreasing inventory: productId=${item.productId}, quantity=${item.quantity}`);
+        await decreaseInventory(item.productId, item.quantity);
+        console.log(`Inventory decreased successfully for product ${item.productId}`);
+      }
+    } catch (inventoryError) {
+      console.error('Inventory update error:', inventoryError);
+      return res.status(400).json({ message: inventoryError.message || 'Failed to update inventory' });
     }
 
     order.status = 'shipped';

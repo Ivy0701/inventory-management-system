@@ -180,6 +180,67 @@
           >
             {{ isProcessing ? 'Confirming...' : 'Confirm Receipt' }}
           </button>
+
+          <!-- Customer: Apply after-sales (when shipped or completed and no pending after-sales) -->
+          <button
+            v-if="isCustomer && ['shipped', 'completed'].includes(selectedOrder.status) && !hasPendingAfterSales"
+            class="btn-secondary"
+            type="button"
+            :disabled="isProcessing"
+            @click="openAfterSalesModal"
+          >
+            Apply After-Sales
+          </button>
+        </div>
+
+        <!-- After-sales modal -->
+        <div v-if="showAfterSalesModal" class="after-sales-modal" @click.self="closeAfterSalesModal">
+          <div class="after-sales-modal__content">
+            <div class="after-sales-modal__header">
+              <h3>Apply After-Sales</h3>
+              <button class="after-sales-modal__close" type="button" @click="closeAfterSalesModal">×</button>
+            </div>
+            <div class="after-sales-modal__body">
+              <div class="form-group">
+                <label class="form-label">Type *</label>
+                <div class="after-sales-modal__type">
+                  <label class="radio-label">
+                    <input
+                      type="radio"
+                      value="exchange"
+                      v-model="afterSalesForm.type"
+                    />
+                    Exchange
+                  </label>
+                  <label class="radio-label">
+                    <input
+                      type="radio"
+                      value="refund"
+                      v-model="afterSalesForm.type"
+                    />
+                    Return & Refund
+                  </label>
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="afterSalesReason">Reason *</label>
+                <textarea
+                  id="afterSalesReason"
+                  v-model="afterSalesForm.reason"
+                  class="form-input"
+                  rows="3"
+                  placeholder="Please describe the reason for exchange or refund"
+                  required
+                ></textarea>
+              </div>
+            </div>
+            <div class="after-sales-modal__footer">
+              <button class="btn-secondary" type="button" @click="closeAfterSalesModal">Cancel</button>
+              <button class="btn-primary" type="button" :disabled="isProcessing" @click="submitAfterSales">
+                {{ isProcessing ? 'Submitting...' : 'Submit Request' }}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -188,7 +249,7 @@
 
 <script setup>
 import { reactive, ref, computed, onMounted } from 'vue';
-import { fetchOrders, shipOrder, confirmOrderReceipt, confirmOrder as confirmOrderApi } from '../services/orderService';
+import { fetchOrders, shipOrder, confirmOrderReceipt, confirmOrder as confirmOrderApi, returnOrder } from '../services/orderService';
 import { useAppStore } from '../store/appStore';
 
 const appStore = useAppStore();
@@ -213,8 +274,10 @@ const isCustomer = computed(() => appStore.user.role === 'customer');
 // Show actions if there are available actions for current user and order status
 const showActions = computed(() => {
   if (!selectedOrder.value) return false;
-  return (isSalesStaff.value && ['pending', 'processing'].includes(selectedOrder.value.status)) ||
-         (isCustomer.value && selectedOrder.value.status === 'shipped');
+  return (
+    (isSalesStaff.value && ['pending', 'processing'].includes(selectedOrder.value.status)) ||
+    (isCustomer.value && ['shipped', 'completed'].includes(selectedOrder.value.status))
+  );
 });
 
 const statusLabelMap = {
@@ -223,7 +286,8 @@ const statusLabelMap = {
   shipped: 'Shipped',
   completed: 'Completed',
   cancelled: 'Cancelled',
-  returned: 'Returned'
+  returned: 'Returned',
+  after_sales_processing: '售后处理中'
 };
 
 const statusClassMap = {
@@ -232,13 +296,27 @@ const statusClassMap = {
   shipped: 'info',
   completed: 'success',
   cancelled: 'danger',
-  returned: 'danger'
+  returned: 'danger',
+  after_sales_processing: 'info'
 };
 
 const mapOrder = (order) => ({
   ...order,
   statusLabel: order.statusLabel || statusLabelMap[order.status] || order.status,
   statusClass: statusClassMap[order.status] || 'default'
+});
+
+const showAfterSalesModal = ref(false);
+const afterSalesForm = reactive({
+  type: '',
+  reason: ''
+});
+
+const hasPendingAfterSales = computed(() => {
+  if (!selectedOrder.value || !selectedOrder.value.afterSales) return false;
+  const info = selectedOrder.value.afterSales;
+  // Only treat as pending after-sales if type & reason are present
+  return !!info.type && !!info.reason && info.status === 'pending';
 });
 
 const filteredOrders = computed(() => {
@@ -363,6 +441,47 @@ const handleConfirmReceipt = async () => {
     window.alert('Order receipt confirmed successfully!');
   } catch (error) {
     window.alert('Failed to confirm receipt: ' + (error.message || 'Unknown error'));
+  } finally {
+    isProcessing.value = false;
+  }
+};
+
+const openAfterSalesModal = () => {
+  afterSalesForm.type = '';
+  afterSalesForm.reason = '';
+  showAfterSalesModal.value = true;
+};
+
+const closeAfterSalesModal = () => {
+  showAfterSalesModal.value = false;
+};
+
+const submitAfterSales = async () => {
+  if (!selectedOrder.value) return;
+  if (!afterSalesForm.type) {
+    window.alert('Please select after-sales type (exchange or refund)');
+    return;
+  }
+  if (!afterSalesForm.reason || !afterSalesForm.reason.trim()) {
+    window.alert('Please enter the reason for after-sales');
+    return;
+  }
+
+  isProcessing.value = true;
+  try {
+    const updatedOrder = await returnOrder(selectedOrder.value.id, {
+      type: afterSalesForm.type,
+      reason: afterSalesForm.reason
+    });
+    const orderIndex = orders.value.findIndex(o => o.id === selectedOrder.value.id);
+    if (orderIndex !== -1) {
+      orders.value[orderIndex] = mapOrder(updatedOrder);
+      selectedOrder.value = mapOrder(updatedOrder);
+    }
+    window.alert('After-sales request submitted successfully');
+    closeAfterSalesModal();
+  } catch (error) {
+    window.alert('Failed to submit after-sales request: ' + (error.message || 'Unknown error'));
   } finally {
     isProcessing.value = false;
   }
@@ -516,6 +635,71 @@ onMounted(() => {
 
 .customer-orders__actions .btn-primary {
   min-width: 160px;
+}
+
+.after-sales-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2100;
+  padding: 20px;
+}
+
+.after-sales-modal__content {
+  background: var(--color-surface);
+  border-radius: 16px;
+  width: 100%;
+  max-width: 520px;
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.after-sales-modal__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.after-sales-modal__close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: var(--color-text-muted);
+}
+
+.after-sales-modal__body {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.after-sales-modal__footer {
+  padding: 16px 20px;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.after-sales-modal__type {
+  display: flex;
+  gap: 16px;
+}
+
+.radio-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
 }
 
 @media (max-width: 960px) {

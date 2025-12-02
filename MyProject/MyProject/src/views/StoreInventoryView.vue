@@ -32,7 +32,9 @@
 
     <section class="card">
       <h2 class="section-title">Inventory List</h2>
-      <div class="store-inventory__table">
+      <div v-if="isLoading" class="empty">Loading inventory...</div>
+      <div v-else-if="!filteredInventory.length" class="empty">No inventory found</div>
+      <div v-else class="store-inventory__table">
         <div class="store-inventory__table-header">
           <span class="col col-wide">Product</span>
           <span class="col">Store</span>
@@ -88,120 +90,89 @@
 </template>
 
 <script setup>
-import { reactive, ref, computed } from 'vue';
+import { reactive, ref, computed, onMounted } from 'vue';
+import { initializeInventory, getInventory } from '../services/inventoryService.js';
 
 const stores = ['Store A - Downtown', 'Store B - Shopping Mall', 'Store C - Airport'];
 
-const inventory = reactive([
-  {
-    sku: 'PROD-001',
+// Product metadata (for display purposes)
+const productMetadata = {
+  'PROD-001': {
     name: 'Casual T-Shirt',
     spec: 'S/M/L/XL',
-    total: 120,
-    available: 98,
     threshold: 80,
-    warningLevel: 'default',
-    warningLabel: 'Normal',
     store: 'Store A - Downtown',
     location: 'A区-03-05',
     lastInDate: '2024-01-12',
-    restockAdvice: 'No restock needed',
     colors: ['Black', 'White', 'Blue', 'Red', 'Gray'],
     sizes: ['S', 'M', 'L', 'XL'],
     price: 29.99,
     icon: '👕'
   },
-  {
-    sku: 'PROD-002',
+  'PROD-002': {
     name: 'Classic Denim Jeans',
     spec: '28/30/32/34/36',
-    total: 85,
-    available: 65,
     threshold: 50,
-    warningLevel: 'warning',
-    warningLabel: 'Low Stock',
     store: 'Store B - Shopping Mall',
     location: 'B区-01-02',
     lastInDate: '2024-01-09',
-    restockAdvice: 'Suggest restock 20 pieces',
     colors: ['Blue', 'Black', 'Gray'],
     sizes: ['28', '30', '32', '34', '36'],
     price: 59.99,
     icon: '👖'
   },
-  {
-    sku: 'PROD-003',
+  'PROD-003': {
     name: 'Hooded Sweatshirt',
     spec: 'S/M/L/XL/XXL',
-    total: 45,
-    available: 30,
     threshold: 50,
-    warningLevel: 'warning',
-    warningLabel: 'Low Stock',
     store: 'Store A - Downtown',
     location: 'A区-02-03',
     lastInDate: '2024-01-10',
-    restockAdvice: 'Suggest restock 25 pieces',
     colors: ['Black', 'Gray', 'Navy', 'Red'],
     sizes: ['S', 'M', 'L', 'XL', 'XXL'],
     price: 49.99,
     icon: '🧥'
   },
-  {
-    sku: 'PROD-004',
+  'PROD-004': {
     name: 'Chino Pants',
     spec: '30/32/34/36/38',
-    total: 60,
-    available: 45,
     threshold: 40,
-    warningLevel: 'default',
-    warningLabel: 'Normal',
     store: 'Store C - Airport',
     location: 'C区-02-01',
     lastInDate: '2024-01-11',
-    restockAdvice: 'No restock needed',
     colors: ['Khaki', 'Navy', 'Black', 'Olive'],
     sizes: ['30', '32', '34', '36', '38'],
     price: 54.99,
     icon: '👔'
   },
-  {
-    sku: 'PROD-005',
+  'PROD-005': {
     name: 'Polo Shirt',
     spec: 'S/M/L/XL',
-    total: 90,
-    available: 75,
     threshold: 60,
-    warningLevel: 'default',
-    warningLabel: 'Normal',
     store: 'Store B - Shopping Mall',
     location: 'B区-01-04',
     lastInDate: '2024-01-13',
-    restockAdvice: 'No restock needed',
     colors: ['White', 'Black', 'Navy', 'Green', 'Red'],
     sizes: ['S', 'M', 'L', 'XL'],
     price: 39.99,
     icon: '👔'
   },
-  {
-    sku: 'PROD-006',
+  'PROD-006': {
     name: 'Jogger Pants',
     spec: 'S/M/L/XL',
-    total: 12,
-    available: 5,
     threshold: 25,
-    warningLevel: 'danger',
-    warningLabel: 'Out of Stock',
     store: 'Store A - Downtown',
     location: 'A区-04-01',
     lastInDate: '2024-01-05',
-    restockAdvice: 'Restock immediately 30 pieces',
     colors: ['Black', 'Gray', 'Navy', 'Olive'],
     sizes: ['S', 'M', 'L', 'XL'],
     price: 44.99,
     icon: '👖'
   }
-]);
+};
+
+const inventory = reactive([]);
+const isLoading = ref(false);
 
 const filters = reactive({
   sku: '',
@@ -210,25 +181,95 @@ const filters = reactive({
   status: ''
 });
 
-const filteredInventory = ref([...inventory]);
-const selectedItem = ref(filteredInventory.value[0] || null);
-
-const applyFilters = () => {
-  filteredInventory.value = inventory.filter((item) => {
+const filteredInventory = computed(() => {
+  return inventory.filter((item) => {
     const matchSku = !filters.sku || item.sku.toLowerCase().includes(filters.sku.toLowerCase());
     const matchName = !filters.name || item.name.includes(filters.name);
     const matchStore = !filters.store || item.store === filters.store;
     const matchStatus = !filters.status || item.warningLabel === filters.status;
     return matchSku && matchName && matchStore && matchStatus;
   });
-  selectedItem.value = filteredInventory.value[0] || null;
+});
+
+const selectedItem = ref(null);
+
+const applyFilters = () => {
+  // Filters are applied via computed property
+  if (filteredInventory.value.length > 0 && !selectedItem.value) {
+    selectedItem.value = filteredInventory.value[0];
+  }
 };
 
 const selectItem = (item) => {
   selectedItem.value = item;
 };
 
-applyFilters();
+const getWarningLevel = (quantity, threshold) => {
+  if (quantity === 0) return { level: 'danger', label: 'Out of Stock' };
+  if (quantity < threshold) return { level: 'warning', label: 'Low Stock' };
+  return { level: 'default', label: 'Normal' };
+};
+
+const getRestockAdvice = (quantity, threshold) => {
+  if (quantity === 0) return 'Restock immediately 30 pieces';
+  if (quantity < threshold) return `Suggest restock ${threshold - quantity} pieces`;
+  return 'No restock needed';
+};
+
+const loadInventory = async () => {
+  isLoading.value = true;
+  try {
+    // Fetch inventory from backend first
+    let data = await getInventory();
+    
+    // Only initialize if no inventory records exist
+    if (!data || data.length === 0) {
+      await initializeInventory();
+      // Fetch again after initialization
+      data = await getInventory();
+    }
+    
+    // Map backend data to frontend format
+    inventory.length = 0;
+    data.forEach((item) => {
+      const metadata = productMetadata[item.productId];
+      if (metadata) {
+        const warning = getWarningLevel(item.available, metadata.threshold);
+        inventory.push({
+          sku: item.productId,
+          name: metadata.name,
+          spec: metadata.spec,
+          total: item.totalStock || 200, // Total Stock is always 200
+          available: item.available, // Available stock changes with shipping/returns
+          threshold: metadata.threshold,
+          warningLevel: warning.level,
+          warningLabel: warning.label,
+          store: metadata.store,
+          location: metadata.location,
+          lastInDate: metadata.lastInDate,
+          restockAdvice: getRestockAdvice(item.available, metadata.threshold),
+          colors: metadata.colors,
+          sizes: metadata.sizes,
+          price: metadata.price,
+          icon: metadata.icon
+        });
+      }
+    });
+    
+    if (inventory.length > 0 && !selectedItem.value) {
+      selectedItem.value = inventory[0];
+    }
+  } catch (error) {
+    console.error('Failed to load inventory:', error);
+    window.alert('Failed to load inventory: ' + (error.message || 'Unknown error'));
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+onMounted(() => {
+  loadInventory();
+});
 </script>
 
 <style scoped>

@@ -63,13 +63,30 @@
           </div>
           <div class="form-group">
             <label class="form-label" for="phone">Phone Number *</label>
-            <input
-              id="phone"
-              v-model="addressForm.phone"
-              class="form-input"
-              placeholder="Enter phone number"
-              required
-            />
+            <div class="phone-row">
+              <select
+                id="country"
+                v-model="addressForm.country"
+                class="form-input phone-row__country"
+                required
+              >
+                <option v-for="country in countries" :key="country.code" :value="country.code">
+                  {{ country.name }}
+                </option>
+              </select>
+              <div class="phone-row__code-static">
+                {{ addressForm.phoneCode }}
+              </div>
+              <input
+                id="phone"
+                v-model="addressForm.phone"
+                class="form-input phone-row__number"
+                :placeholder="currentPhonePlaceholder"
+                :maxlength="phoneMaxLength"
+                @input="onPhoneInput"
+                required
+              />
+            </div>
           </div>
           <div class="form-group">
             <label class="form-label" for="street">Street Address *</label>
@@ -84,23 +101,31 @@
           <div class="form-row">
             <div class="form-group">
               <label class="form-label" for="city">City *</label>
-              <input
+              <select
                 id="city"
                 v-model="addressForm.city"
                 class="form-input"
-                placeholder="Enter city"
                 required
-              />
+              >
+                <option disabled value="">Select city</option>
+                <option v-for="city in currentCities" :key="city" :value="city">
+                  {{ city }}
+                </option>
+              </select>
             </div>
             <div class="form-group">
               <label class="form-label" for="state">State/Province *</label>
-              <input
+              <select
                 id="state"
                 v-model="addressForm.state"
                 class="form-input"
-                placeholder="Enter state"
                 required
-              />
+              >
+                <option disabled value="">Select state/province</option>
+                <option v-for="state in currentStates" :key="state" :value="state">
+                  {{ state }}
+                </option>
+              </select>
             </div>
           </div>
           <div class="form-group">
@@ -143,7 +168,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, onMounted, computed, watch } from 'vue';
 
 const loading = ref(false);
 const showAddModal = ref(false);
@@ -151,8 +176,27 @@ const showEditModal = ref(false);
 const addresses = ref([]);
 const editingAddressId = ref(null);
 
+const countries = [
+  {
+    code: 'CN',
+    name: 'China',
+    phoneCode: '+86',
+    cities: ['Beijing', 'Shanghai', 'Guangzhou', 'Shenzhen'],
+    states: ['Beijing', 'Shanghai', 'Guangdong', 'Zhejiang']
+  },
+  {
+    code: 'HK',
+    name: 'Hong Kong',
+    phoneCode: '+852',
+    cities: ['Hong Kong Island', 'Kowloon', 'New Territories'],
+    states: ['Hong Kong']
+  }
+];
+
 const addressForm = reactive({
   name: '',
+  country: 'CN',
+  phoneCode: '+86',
   phone: '',
   street: '',
   city: '',
@@ -161,6 +205,33 @@ const addressForm = reactive({
   notes: '',
   isDefault: false
 });
+
+const currentCountry = computed(() => {
+  return countries.find(c => c.code === addressForm.country) || countries[0];
+});
+
+const currentCities = computed(() => currentCountry.value.cities);
+const currentStates = computed(() => currentCountry.value.states);
+
+const currentPhonePlaceholder = computed(() => {
+  return addressForm.phoneCode === '+86' ? '11 digits mobile number' : '8 digits mobile number';
+});
+
+const phoneMaxLength = computed(() => {
+  return addressForm.phoneCode === '+86' ? 11 : 8;
+});
+
+// When country changes, force phoneCode and reset city/state/phone
+watch(
+  () => addressForm.country,
+  (newCode) => {
+    const found = countries.find(c => c.code === newCode);
+    addressForm.phoneCode = found ? found.phoneCode : '+86';
+    addressForm.city = '';
+    addressForm.state = '';
+    addressForm.phone = '';
+  }
+);
 
 const loadAddresses = async () => {
   loading.value = true;
@@ -182,7 +253,18 @@ const loadAddresses = async () => {
 
 const editAddress = (address) => {
   editingAddressId.value = address.id;
-  Object.assign(addressForm, address);
+  Object.assign(addressForm, {
+    name: address.name,
+    country: address.country || 'CN',
+    phoneCode: address.phoneCode || (address.country === 'HK' ? '+852' : '+86'),
+    phone: address.phone,
+    street: address.street,
+    city: address.city,
+    state: address.state,
+    zipCode: address.zipCode,
+    notes: address.notes || '',
+    isDefault: !!address.isDefault
+  });
   showEditModal.value = true;
 };
 
@@ -205,6 +287,18 @@ const deleteAddress = async (id) => {
 
 const saveAddress = async () => {
   try {
+    // Basic phone validation based on country/phone code
+    const numericPhone = addressForm.phone.replace(/\D/g, '');
+    const phoneLen = numericPhone.length;
+    if (addressForm.phoneCode === '+86' && phoneLen !== 11) {
+      window.alert('For China (+86), phone number must be 11 digits.');
+      return;
+    }
+    if (addressForm.phoneCode === '+852' && phoneLen !== 8) {
+      window.alert('For Hong Kong (+852), phone number must be 8 digits.');
+      return;
+    }
+
     if (addressForm.isDefault) {
       // Remove default flag from other addresses
       addresses.value.forEach(addr => {
@@ -214,16 +308,21 @@ const saveAddress = async () => {
       });
     }
 
+    const normalizedAddress = {
+      ...addressForm,
+      phone: `${addressForm.phoneCode} ${numericPhone}`
+    };
+
     if (showEditModal.value && editingAddressId.value) {
       // Update existing address
       const index = addresses.value.findIndex(addr => addr.id === editingAddressId.value);
       if (index > -1) {
-        addresses.value[index] = { ...addressForm, id: editingAddressId.value };
+        addresses.value[index] = { ...normalizedAddress, id: editingAddressId.value };
       }
     } else {
       // Add new address
       const newAddress = {
-        ...addressForm,
+        ...normalizedAddress,
         id: `addr-${Date.now()}`
       };
       addresses.value.push(newAddress);
@@ -247,6 +346,8 @@ const closeModal = () => {
   editingAddressId.value = null;
   Object.assign(addressForm, {
     name: '',
+    country: 'CN',
+    phoneCode: '+86',
     phone: '',
     street: '',
     city: '',
@@ -255,6 +356,11 @@ const closeModal = () => {
     notes: '',
     isDefault: false
   });
+};
+
+const onPhoneInput = (event) => {
+  const numeric = event.target.value.replace(/\D/g, '').slice(0, phoneMaxLength.value);
+  addressForm.phone = numeric;
 };
 
 onMounted(() => {

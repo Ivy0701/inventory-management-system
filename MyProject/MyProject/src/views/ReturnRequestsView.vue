@@ -123,7 +123,8 @@
 </template>
 
 <script setup>
-import { reactive, ref, computed } from 'vue';
+import { reactive, ref, computed, onMounted } from 'vue';
+import { fetchOrders, approveAfterSales, rejectAfterSales } from '../services/orderService';
 
 const filters = reactive({
   orderNumber: '',
@@ -131,71 +132,43 @@ const filters = reactive({
   status: ''
 });
 
-const requests = ref([
-  {
-    id: 'RET-001',
-    orderNumber: 'SO-20240123',
-    customerName: 'John Smith',
-    requestDate: '2024-01-15T10:30:00',
-    status: 'pending',
-    statusLabel: 'Pending',
-    statusClass: 'warning',
-    reason: 'Product defect',
-    description: 'The product has a manufacturing defect on the left sleeve',
-    amount: 89.97,
-    items: [
-      {
-        productName: 'Casual T-Shirt',
-        color: 'Blue',
-        size: 'L',
-        quantity: 3,
-        price: 29.99
-      }
-    ]
-  },
-  {
-    id: 'RET-002',
-    orderNumber: 'SO-20240120',
-    customerName: 'Jane Doe',
-    requestDate: '2024-01-14T14:20:00',
-    status: 'approved',
-    statusLabel: 'Approved',
-    statusClass: 'success',
-    reason: 'Wrong size',
-    description: 'Ordered size M but received size S',
-    amount: 59.99,
-    items: [
-      {
-        productName: 'Classic Denim Jeans',
-        color: 'Blue',
-        size: 'S',
-        quantity: 1,
-        price: 59.99
-      }
-    ]
-  },
-  {
-    id: 'RET-003',
-    orderNumber: 'SO-20240118',
-    customerName: 'Mike Johnson',
-    requestDate: '2024-01-13T09:15:00',
-    status: 'processing',
-    statusLabel: 'Processing',
-    statusClass: 'info',
-    reason: 'Not satisfied',
-    description: 'Product quality does not meet expectations',
-    amount: 49.99,
-    items: [
-      {
-        productName: 'Hooded Sweatshirt',
-        color: 'Black',
-        size: 'M',
-        quantity: 1,
-        price: 49.99
-      }
-    ]
+const requests = ref([]);
+const isLoading = ref(false);
+
+const statusClassMap = {
+  pending: 'warning',
+  approved: 'success',
+  rejected: 'danger',
+  processing: 'info',
+  completed: 'success'
+};
+
+const loadRequests = async () => {
+  isLoading.value = true;
+  try {
+    const orders = await fetchOrders();
+    // Build requests from orders that have after-sales info
+    requests.value = orders
+      .filter(o => o.afterSales && o.afterSales.type && o.afterSales.reason)
+      .map(o => ({
+        id: o.id,
+        orderNumber: o.orderNumber,
+        customerName: o.customerName,
+        requestDate: o.afterSales.createdAt || o.updatedAt || o.createdAt,
+        status: o.afterSales.status || 'pending',
+        statusLabel: (o.afterSales.status || 'pending').charAt(0).toUpperCase() + (o.afterSales.status || 'pending').slice(1),
+        statusClass: statusClassMap[o.afterSales.status || 'pending'] || 'default',
+        reason: o.afterSales.reason,
+        description: o.remark || '',
+        amount: o.totalAmount,
+        items: o.items || []
+      }));
+  } catch (error) {
+    window.alert('Failed to load after-sales requests: ' + (error.message || 'Unknown error'));
+  } finally {
+    isLoading.value = false;
   }
-]);
+};
 
 const filteredRequests = computed(() => {
   return requests.value.filter((request) => {
@@ -206,7 +179,7 @@ const filteredRequests = computed(() => {
   });
 });
 
-const selectedRequest = ref(filteredRequests.value[0] || null);
+const selectedRequest = ref(null);
 
 const applyFilters = () => {
   // Filters are applied via computed property
@@ -219,24 +192,32 @@ const selectRequest = (request) => {
   selectedRequest.value = request;
 };
 
-const approveRequest = () => {
+const approveRequest = async () => {
   if (!selectedRequest.value) return;
-  if (window.confirm('Are you sure you want to approve this return request?')) {
-    selectedRequest.value.status = 'approved';
-    selectedRequest.value.statusLabel = 'Approved';
-    selectedRequest.value.statusClass = 'success';
-    window.alert('Return request approved');
+  if (!window.confirm('Are you sure you want to approve this after-sales request?')) {
+    return;
+  }
+  try {
+    await approveAfterSales(selectedRequest.value.id);
+    window.alert('After-sales request approved');
+    await loadRequests();
+    applyFilters();
+  } catch (error) {
+    window.alert('Failed to approve request: ' + (error.message || 'Unknown error'));
   }
 };
 
-const rejectRequest = () => {
+const rejectRequest = async () => {
   if (!selectedRequest.value) return;
   const reason = window.prompt('Please provide a reason for rejection:');
-  if (reason) {
-    selectedRequest.value.status = 'rejected';
-    selectedRequest.value.statusLabel = 'Rejected';
-    selectedRequest.value.statusClass = 'danger';
-    window.alert('Return request rejected');
+  if (!reason) return;
+  try {
+    await rejectAfterSales(selectedRequest.value.id, { reason });
+    window.alert('After-sales request rejected');
+    await loadRequests();
+    applyFilters();
+  } catch (error) {
+    window.alert('Failed to reject request: ' + (error.message || 'Unknown error'));
   }
 };
 
@@ -259,6 +240,10 @@ const getItemIcon = (productName) => {
   if (name.includes('polo')) return '👔';
   return '📦';
 };
+
+onMounted(() => {
+  loadRequests();
+});
 </script>
 
 <style scoped>

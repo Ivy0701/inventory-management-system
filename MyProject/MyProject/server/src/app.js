@@ -4,6 +4,7 @@ import morgan from 'morgan';
 import connectDb from './config/db.js';
 import orderRoutes from './routes/orderRoutes.js';
 import authRoutes from './routes/authRoutes.js';
+import inventoryRoutes from './routes/inventoryRoutes.js';
 import { initDefaultUsers } from './scripts/initDefaultUsers.js';
 
 connectDb();
@@ -21,6 +22,7 @@ app.get('/', (_req, res) => {
 
 app.use('/api/orders', orderRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/inventory', inventoryRoutes);
 
 app.use((err, _req, res, _next) => {
   console.error(err);

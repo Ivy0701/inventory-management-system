@@ -47,8 +47,23 @@ const orderSchema = new mongoose.Schema(
     inventoryStatus: { type: String, default: 'Inventory Checking' },
     status: {
       type: String,
-      enum: ['pending', 'processing', 'shipped', 'completed', 'cancelled', 'returned'],
+      enum: ['pending', 'processing', 'shipped', 'completed', 'cancelled', 'returned', 'after_sales_processing'],
       default: 'pending'
+    },
+    // After-sales (return / exchange) request info
+    afterSales: {
+      type: {
+        type: String,
+        enum: ['exchange', 'refund']
+      },
+      reason: { type: String },
+      status: {
+        type: String,
+        enum: ['pending', 'approved', 'rejected'],
+        default: 'pending'
+      },
+      createdAt: { type: Date },
+      processedAt: { type: Date }
     },
     timeline: { type: [timelineSchema], default: [] }
   },

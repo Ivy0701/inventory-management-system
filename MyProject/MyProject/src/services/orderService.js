@@ -15,8 +15,9 @@ export const confirmOrderReceipt = async (orderId) => {
   return response.data;
 };
 
-export const returnOrder = async (orderId) => {
-  const response = await apiClient.patch(`/orders/${orderId}/return`);
+// Customer applies for after-sales (exchange / refund)
+export const returnOrder = async (orderId, payload) => {
+  const response = await apiClient.patch(`/orders/${orderId}/return`, payload);
   return response.data;
 };
 
@@ -32,6 +33,16 @@ export const confirmOrder = async (orderId) => {
 
 export const shipOrder = async (orderId) => {
   const response = await apiClient.patch(`/orders/${orderId}/ship`);
+  return response.data;
+};
+
+export const approveAfterSales = async (orderId) => {
+  const response = await apiClient.patch(`/orders/${orderId}/after-sales/approve`);
+  return response.data;
+};
+
+export const rejectAfterSales = async (orderId, payload) => {
+  const response = await apiClient.patch(`/orders/${orderId}/after-sales/reject`, payload);
   return response.data;
 };
 
