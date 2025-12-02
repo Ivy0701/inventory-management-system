@@ -148,6 +148,17 @@
         </div>
 
         <div v-if="showActions" class="customer-orders__actions">
+          <!-- Sales staff: Confirm order button (when status is pending) -->
+          <button
+            v-if="isSalesStaff && selectedOrder.status === 'pending'"
+            class="btn-primary"
+            type="button"
+            :disabled="isProcessing"
+            @click="handleConfirmOrder"
+          >
+            {{ isProcessing ? 'Confirming...' : 'Confirm Order' }}
+          </button>
+
           <!-- Sales staff: Ship order button (when status is processing) -->
           <button
             v-if="isSalesStaff && selectedOrder.status === 'processing'"
@@ -177,7 +188,7 @@
 
 <script setup>
 import { reactive, ref, computed, onMounted } from 'vue';
-import { fetchOrders, shipOrder, confirmOrderReceipt } from '../services/orderService';
+import { fetchOrders, shipOrder, confirmOrderReceipt, confirmOrder as confirmOrderApi } from '../services/orderService';
 import { useAppStore } from '../store/appStore';
 
 const appStore = useAppStore();
@@ -202,7 +213,7 @@ const isCustomer = computed(() => appStore.user.role === 'customer');
 // Show actions if there are available actions for current user and order status
 const showActions = computed(() => {
   if (!selectedOrder.value) return false;
-  return (isSalesStaff.value && selectedOrder.value.status === 'processing') ||
+  return (isSalesStaff.value && ['pending', 'processing'].includes(selectedOrder.value.status)) ||
          (isCustomer.value && selectedOrder.value.status === 'shipped');
 });
 
@@ -283,6 +294,30 @@ const getItemIcon = (productName) => {
   if (name.includes('sweatshirt') || name.includes('hood')) return '🧥';
   if (name.includes('polo')) return '👔';
   return '📦';
+};
+
+const handleConfirmOrder = async () => {
+  if (!selectedOrder.value) return;
+
+  if (!window.confirm('Are you sure you want to confirm this order? The order status will change to "Processing".')) {
+    return;
+  }
+
+  isProcessing.value = true;
+  try {
+    const updatedOrder = await confirmOrderApi(selectedOrder.value.id);
+    // Update the order in the list
+    const orderIndex = orders.value.findIndex(o => o.id === selectedOrder.value.id);
+    if (orderIndex !== -1) {
+      orders.value[orderIndex] = mapOrder(updatedOrder);
+      selectedOrder.value = mapOrder(updatedOrder);
+    }
+    window.alert('Order confirmed successfully!');
+  } catch (error) {
+    window.alert('Failed to confirm order: ' + (error.message || 'Unknown error'));
+  } finally {
+    isProcessing.value = false;
+  }
 };
 
 const handleShipOrder = async () => {
