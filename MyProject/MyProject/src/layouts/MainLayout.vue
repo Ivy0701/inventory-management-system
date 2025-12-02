@@ -64,8 +64,8 @@ const navItems = computed(() => {
   } else if (role === 'centralManager') {
     return [
       { label: 'Dashboard', icon: '🏠', to: '/app/central/dashboard' },
+      { label: 'Inventory Count', icon: '📊', to: '/app/central/inventory-count' },
       { label: 'Approve Replenishment', icon: '✅', to: '/app/central/approvals' },
-      { label: 'Allocate Commodities', icon: '🔄', to: '/app/central/allocation' },
       { label: 'Manage Suppliers', icon: '🤝', to: '/app/central/suppliers' }
     ];
   }
@@ -83,8 +83,8 @@ const pageTitles = {
   '/app/regional/receive-goods': 'Receive & Stock Goods',
   '/app/regional/replenishment': 'Submit Replenishment Application',
   '/app/central/dashboard': 'Central Warehouse Dashboard',
-  '/app/central/approvals': 'Approve Replenishment Applications',
-  '/app/central/allocation': 'Allocate Commodities Between Regions',
+  '/app/central/inventory-count': 'Inventory Count',
+  '/app/central/approvals': 'Approve Replenishment',
   '/app/central/suppliers': 'Manage Suppliers'
 };
 
@@ -99,8 +99,8 @@ const pageSubtitles = {
   '/app/regional/receive-goods': 'Record receiving and stocking activities',
   '/app/regional/replenishment': 'Submit replenishment applications to central warehouse',
   '/app/central/dashboard': 'Oversee nationwide stock and approvals',
+  '/app/central/inventory-count': 'View inventory across all warehouses and stores',
   '/app/central/approvals': 'Review and approve replenishment applications',
-  '/app/central/allocation': 'Balance inventory between different regions',
   '/app/central/suppliers': 'Maintain supplier partnerships and SLAs'
 };
 

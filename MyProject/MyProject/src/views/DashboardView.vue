@@ -163,8 +163,8 @@ const shortcuts = computed(() => {
     ];
   } else if (userRole.value === 'centralManager') {
     return [
-      { title: 'Approve Applications', desc: 'Review replenishment requests', icon: '✅', to: '/app/central/approvals' },
-      { title: 'Allocate Commodities', desc: 'Balance inventory between regions', icon: '🔄', to: '/app/central/allocation' },
+      { title: 'Inventory Count', desc: 'View inventory across all warehouses and stores', icon: '📊', to: '/app/central/inventory-count' },
+      { title: 'Approve Replenishment', desc: 'Review and approve replenishment applications', icon: '✅', to: '/app/central/approvals' },
       { title: 'Manage Suppliers', desc: 'Maintain supplier performance', icon: '🤝', to: '/app/central/suppliers' }
     ];
   }

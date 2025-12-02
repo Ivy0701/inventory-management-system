@@ -160,14 +160,14 @@ const routes = [
         component: () => import('../views/ReplenishmentApprovalView.vue')
       },
       {
-        path: 'allocation',
-        name: 'CentralAllocation',
-        component: () => import('../views/AllocationView.vue')
-      },
-      {
         path: 'suppliers',
         name: 'CentralSuppliers',
         component: () => import('../views/SupplierManagementView.vue')
+      },
+      {
+        path: 'inventory-count',
+        name: 'CentralInventoryCount',
+        component: () => import('../views/CentralInventoryCountView.vue')
       }
     ]
   },

@@ -35,6 +35,36 @@
       </div>
       <form class="dispatch__form" @submit.prevent="confirmDispatch">
         <div class="form-group">
+          <label class="form-label" for="transferFrom">Transfer From *</label>
+          <select id="transferFrom" v-model="dispatchPlan.transferFrom" class="filter-pill" required>
+            <option value="">Select warehouse</option>
+            <option v-for="warehouse in warehouses" :key="warehouse" :value="warehouse">
+              {{ warehouse }}
+            </option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="transferTo">Transfer To *</label>
+          <select id="transferTo" v-model="dispatchPlan.transferTo" class="filter-pill" required>
+            <option value="">Select store</option>
+            <option v-for="store in stores" :key="store" :value="store">
+              {{ store }}
+            </option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="dispatchQuantity">Dispatch Quantity *</label>
+          <input
+            id="dispatchQuantity"
+            v-model.number="dispatchPlan.dispatchQuantity"
+            class="form-input"
+            type="number"
+            min="1"
+            placeholder="Enter quantity"
+            required
+          />
+        </div>
+        <div class="form-group">
           <label class="form-label" for="carrier">Carrier</label>
           <select id="carrier" v-model="dispatchPlan.carrier" class="filter-pill">
             <option value="">Select carrier</option>
@@ -83,8 +113,24 @@
 
 <script setup>
 import { reactive, ref } from 'vue';
+import { useInventoryStore } from '../store/inventoryStore';
+
+const inventoryStore = useInventoryStore();
 
 const carriers = ['Sunshine Logistics', 'East Freight', 'Atlas Transport'];
+
+const warehouses = ['西部仓库', '东部仓库', '北部仓库', '南部仓库'];
+
+const stores = [
+  '西部门店1',
+  '西部门店2',
+  '东部门店1',
+  '东部门店2',
+  '北部门店1',
+  '北部门店2',
+  '南部门店1',
+  '南部门店2'
+];
 
 const pendingShipments = reactive([
   {
@@ -119,6 +165,9 @@ const pendingShipments = reactive([
 const selectedShipment = ref(pendingShipments[0]);
 
 const dispatchPlan = reactive({
+  transferFrom: '',
+  transferTo: '',
+  dispatchQuantity: null,
   carrier: '',
   dock: '',
   departure: '',
@@ -145,11 +194,67 @@ const selectShipment = (order) => {
 };
 
 const confirmDispatch = () => {
-  if (!selectedShipment.value || !dispatchPlan.carrier || !dispatchPlan.departure || !dispatchPlan.dock) {
-    window.alert('Please complete dispatch arrangement');
+  if (!selectedShipment.value) {
+    window.alert('Please select a shipment order');
     return;
   }
-  window.alert(`Order ${selectedShipment.value.orderNo} dispatch confirmed (demo)`);
+  if (!dispatchPlan.transferFrom || !dispatchPlan.transferTo || !dispatchPlan.dispatchQuantity) {
+    window.alert('Please complete required fields: Transfer From, Transfer To, and Dispatch Quantity');
+    return;
+  }
+  if (dispatchPlan.dispatchQuantity <= 0) {
+    window.alert('Dispatch Quantity must be greater than 0');
+    return;
+  }
+
+  // Add to Dispatch History
+  const now = new Date();
+  const timeStr = now.toLocaleString('en-US', { 
+    year: 'numeric', 
+    month: '2-digit', 
+    day: '2-digit', 
+    hour: '2-digit', 
+    minute: '2-digit',
+    hour12: false 
+  }).replace(',', '');
+  
+  const historyEntry = {
+    id: `his-${Date.now()}`,
+    title: `${selectedShipment.value.orderNo} Dispatched`,
+    desc: `Transferred ${dispatchPlan.dispatchQuantity} units from ${dispatchPlan.transferFrom} to ${dispatchPlan.transferTo}${dispatchPlan.carrier ? ` via ${dispatchPlan.carrier}` : ''}`,
+    time: timeStr
+  };
+  
+  history.unshift(historyEntry);
+  
+  // Store dispatch update for inventory synchronization
+  inventoryStore.addDispatchUpdate({
+    transferFrom: dispatchPlan.transferFrom,
+    transferTo: dispatchPlan.transferTo,
+    quantity: dispatchPlan.dispatchQuantity,
+    orderNo: selectedShipment.value.orderNo,
+    timestamp: now.toISOString()
+  });
+
+  // Remove from pending shipments
+  const index = pendingShipments.findIndex(s => s.orderNo === selectedShipment.value.orderNo);
+  if (index > -1) {
+    pendingShipments.splice(index, 1);
+  }
+
+  // Reset form and selection
+  selectedShipment.value = pendingShipments[0] || null;
+  Object.assign(dispatchPlan, {
+    transferFrom: '',
+    transferTo: '',
+    dispatchQuantity: null,
+    carrier: '',
+    dock: '',
+    departure: '',
+    remark: ''
+  });
+
+  window.alert(`Order ${selectedShipment.value?.orderNo || 'dispatch'} confirmed successfully`);
 };
 </script>
 

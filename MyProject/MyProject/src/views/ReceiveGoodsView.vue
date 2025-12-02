@@ -83,6 +83,9 @@
 
 <script setup>
 import { reactive, ref } from 'vue';
+import { useInventoryStore } from '../store/inventoryStore';
+
+const inventoryStore = useInventoryStore();
 
 const inboundPlans = reactive([
   {
@@ -149,11 +152,72 @@ const selectPlan = (plan) => {
 };
 
 const completeReceiving = () => {
+  if (!selectedPlan.value) {
+    window.alert('Please select an inbound plan');
+    return;
+  }
   if (!receivingRecord.received || !receivingRecord.qualified || !receivingRecord.storage) {
     window.alert('Please fill in receiving quantities and storage location');
     return;
   }
-  window.alert('Receiving data saved (demo)');
+
+  // Add to Recent Receiving Logs
+  const now = new Date();
+  const timeStr = now.toLocaleString('en-US', { 
+    year: 'numeric', 
+    month: '2-digit', 
+    day: '2-digit', 
+    hour: '2-digit', 
+    minute: '2-digit',
+    hour12: false 
+  }).replace(',', '');
+
+  const hasIssue = receivingRecord.issue && receivingRecord.issue !== '';
+  const logEntry = {
+    id: `log-${Date.now()}`,
+    title: `${selectedPlan.value.planNo} Completed`,
+    desc: hasIssue 
+      ? `${receivingRecord.qualified} SKU qualified, ${receivingRecord.received - receivingRecord.qualified} exceptions (${receivingRecord.issue}), stored at ${receivingRecord.storage}`
+      : `${receivingRecord.qualified} SKU stocked at ${receivingRecord.storage}`,
+    time: timeStr,
+    result: hasIssue ? 'warning' : 'success'
+  };
+
+  logs.unshift(logEntry);
+
+  // Store receiving update for inventory synchronization
+  inventoryStore.addReceivingUpdate({
+    planNo: selectedPlan.value.planNo,
+    supplier: selectedPlan.value.supplier,
+    received: receivingRecord.received,
+    qualified: receivingRecord.qualified,
+    storage: receivingRecord.storage,
+    timestamp: now.toISOString()
+  });
+
+  // Update plan status
+  if (selectedPlan.value) {
+    selectedPlan.value.statusLabel = 'Completed';
+    selectedPlan.value.statusClass = 'success';
+  }
+
+  // Remove from inbound plans if completed
+  const index = inboundPlans.findIndex(p => p.planNo === selectedPlan.value.planNo);
+  if (index > -1 && selectedPlan.value.statusLabel === 'Completed') {
+    inboundPlans.splice(index, 1);
+  }
+
+  // Reset form
+  selectedPlan.value = inboundPlans[0] || null;
+  Object.assign(receivingRecord, {
+    received: 0,
+    qualified: 0,
+    issue: '',
+    storage: '',
+    remark: ''
+  });
+
+  window.alert('Receiving completed successfully');
 };
 </script>
 

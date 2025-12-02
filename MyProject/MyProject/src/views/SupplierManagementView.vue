@@ -27,16 +27,17 @@
       <h2 class="section-title">Supplier Management · {{ selectedSupplier.name }}</h2>
       <form class="suppliers__form" @submit.prevent="saveSupplier">
         <div class="form-group">
-          <label class="form-label" for="level">Cooperation Level</label>
-          <select id="level" v-model="supplierForm.level" class="filter-pill">
+          <label class="form-label" for="level">Cooperation Level *</label>
+          <select id="level" v-model="supplierForm.level" class="filter-pill" required>
+            <option value="">Select level</option>
             <option value="Strategic">Strategic</option>
             <option value="Core">Core</option>
             <option value="Backup">Backup</option>
           </select>
         </div>
         <div class="form-group">
-          <label class="form-label" for="sla">SLA (days)</label>
-          <input id="sla" v-model.number="supplierForm.sla" class="form-input" type="number" min="1" />
+          <label class="form-label" for="sla">SLA (days) *</label>
+          <input id="sla" v-model.number="supplierForm.sla" class="form-input" type="number" min="1" required />
         </div>
         <div class="form-group">
           <label class="form-label" for="remark">Remark</label>
@@ -126,7 +127,32 @@ const selectSupplier = (supplier) => {
 };
 
 const saveSupplier = () => {
-  window.alert(`Supplier ${selectedSupplier.value.name} information saved (demo)`);
+  if (!selectedSupplier.value) {
+    return;
+  }
+  
+  // Validate all required fields
+  if (!supplierForm.level || !supplierForm.sla || supplierForm.sla < 1) {
+    window.alert('Please fill in all required fields (Cooperation Level and SLA must be at least 1 day)');
+    return;
+  }
+
+  // Update Recent Supplier Interactions
+  const now = new Date();
+  const timeStr = now.toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(/\//g, '-');
+  
+  const interactionDesc = supplierForm.remark.trim() 
+    ? `Updated cooperation level to ${supplierForm.level}, SLA to ${supplierForm.sla} days. Note: ${supplierForm.remark}`
+    : `Updated cooperation level to ${supplierForm.level}, SLA to ${supplierForm.sla} days`;
+  
+  interactions.unshift({
+    id: `si-${Date.now()}`,
+    title: `${selectedSupplier.value.name} Management Update`,
+    desc: interactionDesc,
+    time: timeStr
+  });
+
+  window.alert(`Supplier ${selectedSupplier.value.name} information saved successfully`);
 };
 </script>
 

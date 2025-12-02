@@ -191,7 +191,51 @@ const submitApplication = () => {
     window.alert('Please complete application information');
     return;
   }
-  window.alert('Replenishment application submitted (demo)');
+
+  // Add to Processing Progress Tracking
+  const now = new Date();
+  const timeStr = now.toLocaleString('en-US', { 
+    year: 'numeric', 
+    month: '2-digit', 
+    day: '2-digit', 
+    hour: '2-digit', 
+    minute: '2-digit',
+    hour12: false 
+  }).replace(',', '');
+
+  // Add new application submitted entry
+  progress.splice(2, 0, {
+    title: 'Application Submitted',
+    desc: `${application.product}: ${application.quantity} units from ${application.vendor}, expected delivery ${application.deliveryDate}`,
+    time: timeStr,
+    status: 'completed'
+  });
+
+  // Update "Under Approval" status to processing with current time
+  const approvalIndex = progress.findIndex(p => p.title === 'Under Approval');
+  if (approvalIndex > -1) {
+    progress[approvalIndex].time = timeStr;
+    progress[approvalIndex].status = 'processing';
+  }
+
+  // Reset form
+  const selectedReminder = reminders.find(r => r.product === application.product);
+  if (selectedReminder) {
+    const reminderIndex = reminders.findIndex(r => r.id === selectedReminder.id);
+    if (reminderIndex > -1) {
+      reminders.splice(reminderIndex, 1);
+    }
+  }
+
+  Object.assign(application, {
+    product: '',
+    vendor: '',
+    quantity: '',
+    deliveryDate: '',
+    remark: ''
+  });
+
+  window.alert('Replenishment application submitted successfully');
 };
 </script>
 
