@@ -23,7 +23,11 @@ const orderItemSchema = new mongoose.Schema(
 const shippingAddressSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
+    // 完整电话（包含国家码），例如 "+86 13800138000" 或 "+852 91234567"
     phone: { type: String, required: true },
+    // 额外保存国家与区号，便于后续根据地区做库存/路由策略
+    country: { type: String },
+    phoneCode: { type: String },
     street: { type: String, required: true },
     city: { type: String, required: true },
     state: { type: String, required: true },
@@ -44,6 +48,8 @@ const orderSchema = new mongoose.Schema(
     discount: { type: Number, default: 0 },
     totalAmount: { type: Number, required: true, min: 0 },
     remark: { type: String },
+    // 订单对应的库存扣减位置，例如 "STORE-DEFAULT"、"STORE-EAST-01"
+    inventoryLocationId: { type: String },
     inventoryStatus: { type: String, default: 'Inventory Checking' },
     status: {
       type: String,

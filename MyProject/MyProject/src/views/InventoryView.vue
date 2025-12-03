@@ -1,54 +1,52 @@
 <template>
   <div class="inventory">
     <section class="card">
-      <h2 class="section-title">{{ $t('inventory.filterTitle') }}</h2>
+      <h2 class="section-title">库存列表</h2>
       <div class="filter-bar">
         <input
           v-model="filters.sku"
           class="form-input inventory__filter-input"
-          :placeholder="$t('inventory.productIdPlaceholder')"
+          placeholder="Product ID"
           @input="applyFilters"
         />
         <input
           v-model="filters.name"
           class="form-input inventory__filter-input"
-          :placeholder="$t('inventory.productNamePlaceholder')"
+          placeholder="Product Name"
           @input="applyFilters"
         />
-        <select v-model="filters.warehouse" class="filter-pill inventory__filter-picker" @change="applyFilters">
-          <option value="">{{ $t('inventory.warehouseAll') }}</option>
-          <option v-for="warehouse in warehouses" :key="warehouse" :value="warehouse">
-            Warehouse: {{ warehouse }}
+        <select v-model="filters.location" class="filter-pill inventory__filter-picker" @change="applyFilters">
+          <option value="">Location: All</option>
+          <option v-for="loc in locations" :key="loc.id" :value="loc.id">
+            Location: {{ loc.name }}
           </option>
         </select>
         <select v-model="filters.status" class="filter-pill inventory__filter-picker" @change="applyFilters">
-          <option value="">{{ $t('inventory.statusAll') }}</option>
-          <option value="Normal">{{ $t('inventory.statusNormal') }}</option>
-          <option value="Low Stock">{{ $t('inventory.statusLow') }}</option>
-          <option value="Out of Stock">{{ $t('inventory.statusOut') }}</option>
+          <option value="">Status: All</option>
+          <option value="Normal">Normal</option>
+          <option value="Low Stock">Low Stock</option>
+          <option value="Out of Stock">Out of Stock</option>
         </select>
-      </div>
-      <div class="quick-actions">
-        <button class="btn-primary" type="button" @click="onAddProduct">{{ $t('inventory.addProduct') }}</button>
-        <button class="btn-secondary" type="button" @click="onImport">{{ $t('inventory.importInventory') }}</button>
-        <button class="btn-secondary" type="button" @click="onExport">{{ $t('inventory.exportInventory') }}</button>
       </div>
     </section>
 
     <section class="card">
-      <h2 class="section-title">{{ $t('inventory.listTitle') }}</h2>
-      <div class="inventory__table">
+      <h2 class="section-title">Inventory List</h2>
+      <div v-if="isLoading" class="empty">Loading inventory...</div>
+      <div v-else-if="!filteredInventory.length" class="empty">No inventory found</div>
+      <div v-else class="inventory__table">
         <div class="inventory__table-header">
           <span class="col col-wide">Product</span>
+          <span class="col">Store</span>
           <span class="col">Total Stock</span>
           <span class="col">Available</span>
           <span class="col">Alert</span>
         </div>
         <div
           v-for="item in filteredInventory"
-          :key="item.sku"
+          :key="item.sku + item.locationId"
           class="inventory__table-row"
-          :class="{ 'inventory__table-row--active': selectedItem?.sku === item.sku }"
+          :class="{ 'inventory__table-row--active': selectedItem?.sku === item.sku && selectedItem?.locationId === item.locationId }"
           @click="selectItem(item)"
         >
           <div class="col col-wide">
@@ -56,8 +54,9 @@
               <span style="font-size: 20px; margin-right: 8px;">{{ item.icon || '📦' }}</span>
               {{ item.name }}
             </div>
-            <div class="inventory__item-meta">SKU: {{ item.sku }} | Warehouse: {{ item.warehouse }} | Price: ${{ item.price }}</div>
+            <div class="inventory__item-meta">SKU: {{ item.sku }} | Price: ${{ item.price }}</div>
           </div>
+          <span class="col">{{ item.store }}</span>
           <span class="col">{{ item.total }}</span>
           <span class="col">{{ item.available }}</span>
           <span class="col"><span class="tag" :class="item.warningLevel">{{ item.warningLabel }}</span></span>
@@ -66,7 +65,7 @@
     </section>
 
     <section v-if="selectedItem" class="card">
-      <h2 class="section-title">{{ $t('inventory.detailTitle') }}</h2>
+      <h2 class="section-title">Inventory Details</h2>
       <div class="list">
         <div class="list-item inventory__detail-item">
           <span>Price: ${{ selectedItem.price }}</span>
@@ -91,101 +90,204 @@
 </template>
 
 <script setup>
-// 数据来源改为后端接口：GET /api/inventory/:locationId
-// 插入位置：原有静态 inventory 数组所在的 <script setup> 中
-import { reactive, ref, onMounted } from 'vue';
+import { reactive, ref, computed, onMounted } from 'vue';
 import { useAppStore } from '../store/appStore';
-import { getInventoryByLocation } from '../services/inventoryService';
+import { getInventoryByLocation } from '../services/inventoryService.js';
 
 const appStore = useAppStore();
 
-const warehouses = ['East China Warehouse', 'South China Warehouse', 'Northwest Warehouse'];
+// 三个位置：华东仓库、华东门店1、华东门店2
+const locations = [
+  { id: 'WH-EAST', name: 'East Warehouse' },
+  { id: 'STORE-EAST-01', name: 'East Store 1' },
+  { id: 'STORE-EAST-02', name: 'East Store 2' }
+];
 
-// 后端返回的原始库存数据（按商品 + 位置）
+const stores = ref([]);
+
+// Product metadata (for display purposes)
+const productMetadata = {
+  'PROD-001': {
+    name: 'Casual T-Shirt',
+    spec: 'S/M/L/XL',
+    threshold: 80,
+    store: 'Store A - Downtown',
+    location: 'A区-03-05',
+    lastInDate: '2024-01-12',
+    colors: ['Black', 'White', 'Blue', 'Red', 'Gray'],
+    sizes: ['S', 'M', 'L', 'XL'],
+    price: 29.99,
+    icon: '👕'
+  },
+  'PROD-002': {
+    name: 'Classic Denim Jeans',
+    spec: '28/30/32/34/36',
+    threshold: 50,
+    store: 'Store B - Shopping Mall',
+    location: 'B区-01-02',
+    lastInDate: '2024-01-09',
+    colors: ['Blue', 'Black', 'Gray'],
+    sizes: ['28', '30', '32', '34', '36'],
+    price: 59.99,
+    icon: '👖'
+  },
+  'PROD-003': {
+    name: 'Hooded Sweatshirt',
+    spec: 'S/M/L/XL/XXL',
+    threshold: 50,
+    store: 'Store A - Downtown',
+    location: 'A区-02-03',
+    lastInDate: '2024-01-10',
+    colors: ['Black', 'Gray', 'Navy', 'Red'],
+    sizes: ['S', 'M', 'L', 'XL', 'XXL'],
+    price: 49.99,
+    icon: '🧥'
+  },
+  'PROD-004': {
+    name: 'Chino Pants',
+    spec: '30/32/34/36/38',
+    threshold: 40,
+    store: 'Store C - Airport',
+    location: 'C区-02-01',
+    lastInDate: '2024-01-11',
+    colors: ['Khaki', 'Navy', 'Black', 'Olive'],
+    sizes: ['30', '32', '34', '36', '38'],
+    price: 54.99,
+    icon: '👔'
+  },
+  'PROD-005': {
+    name: 'Polo Shirt',
+    spec: 'S/M/L/XL',
+    threshold: 60,
+    store: 'Store B - Shopping Mall',
+    location: 'B区-01-04',
+    lastInDate: '2024-01-13',
+    colors: ['White', 'Black', 'Navy', 'Green', 'Red'],
+    sizes: ['S', 'M', 'L', 'XL'],
+    price: 39.99,
+    icon: '👔'
+  },
+  'PROD-006': {
+    name: 'Jogger Pants',
+    spec: 'S/M/L/XL',
+    threshold: 25,
+    store: 'Store A - Downtown',
+    location: 'A区-04-01',
+    lastInDate: '2024-01-05',
+    colors: ['Black', 'Gray', 'Navy', 'Olive'],
+    sizes: ['S', 'M', 'L', 'XL'],
+    price: 44.99,
+    icon: '👖'
+  }
+};
+
 const inventory = reactive([]);
+const isLoading = ref(false);
 
 const filters = reactive({
   sku: '',
   name: '',
-  warehouse: '',
+  location: '',
   status: ''
 });
 
-const filteredInventory = ref([]);
-const selectedItem = ref(null);
-
-const mapWarning = (available, minThreshold) => {
-  if (available <= 0) {
-    return { level: 'danger', label: 'Out of Stock' };
-  }
-  if (typeof minThreshold === 'number' && available <= minThreshold) {
-    return { level: 'warning', label: 'Low Stock' };
-  }
-  return { level: 'default', label: 'Normal' };
-};
-
-const refreshInventory = async () => {
-  try {
-    const locationId = appStore.user.assignedLocationId || 'WH-EAST';
-    const data = await getInventoryByLocation(locationId);
-
-    inventory.splice(0, inventory.length, ...data.map((row) => {
-      const { level, label } = mapWarning(row.available, row.minThreshold);
-      return {
-        sku: row.productId,
-        name: row.productName,
-        total: row.totalStock,
-        available: row.available,
-        threshold: row.minThreshold ?? 0,
-        warningLevel: level,
-        warningLabel: label,
-        warehouse: row.locationName || row.locationId || 'Unknown',
-        location: row.locationId,
-        lastInDate: row.updatedAt || row.lastUpdated,
-        restockAdvice: label === 'Low Stock' || label === 'Out of Stock' ? 'Suggest restock' : 'No restock needed',
-        colors: [],
-        sizes: [],
-        price: row.price || 0,
-        icon: '📦'
-      };
-    }));
-
-    applyFilters();
-  } catch (error) {
-    console.error(error);
-    window.alert(error.message || 'Failed to load inventory');
-  }
-};
-
-const applyFilters = () => {
-  filteredInventory.value = inventory.filter((item) => {
+const filteredInventory = computed(() => {
+  return inventory.filter((item) => {
     const matchSku = !filters.sku || item.sku.toLowerCase().includes(filters.sku.toLowerCase());
     const matchName = !filters.name || item.name.includes(filters.name);
-    const matchWarehouse = !filters.warehouse || item.warehouse === filters.warehouse;
+    const matchLocation = !filters.location || item.locationId === filters.location;
     const matchStatus = !filters.status || item.warningLabel === filters.status;
-    return matchSku && matchName && matchWarehouse && matchStatus;
+    return matchSku && matchName && matchLocation && matchStatus;
   });
-  selectedItem.value = filteredInventory.value[0] || null;
+});
+
+const selectedItem = ref(null);
+
+const applyFilters = () => {
+  // Filters are applied via computed property
+  if (filteredInventory.value.length > 0 && !selectedItem.value) {
+    selectedItem.value = filteredInventory.value[0];
+  }
 };
 
 const selectItem = (item) => {
   selectedItem.value = item;
 };
 
-const onAddProduct = () => {
-  window.alert('Open add product dialog (demo)');
+const getWarningLevel = (quantity, threshold) => {
+  if (quantity === 0) return { level: 'danger', label: 'Out of Stock' };
+  if (quantity < threshold) return { level: 'warning', label: 'Low Stock' };
+  return { level: 'default', label: 'Normal' };
 };
 
-const onImport = () => {
-  window.alert('Enter import process (demo)');
+const getRestockAdvice = (quantity, threshold) => {
+  if (quantity === 0) return 'Restock immediately 30 pieces';
+  if (quantity < threshold) return `Suggest restock ${threshold - quantity} pieces`;
+  return 'No restock needed';
 };
 
-const onExport = () => {
-  window.alert('Export report (demo)');
+const loadInventory = async () => {
+  isLoading.value = true;
+  try {
+    // 并行加载三个位置的库存
+    const [warehouseData, store1Data, store2Data] = await Promise.all([
+      getInventoryByLocation('WH-EAST'),
+      getInventoryByLocation('STORE-EAST-01'),
+      getInventoryByLocation('STORE-EAST-02')
+    ]);
+
+    inventory.length = 0;
+
+    // 合并三个位置的数据
+    const allData = [
+      ...warehouseData.map(item => ({ ...item, locationId: 'WH-EAST', locationName: 'East Warehouse' })),
+      ...store1Data.map(item => ({ ...item, locationId: 'STORE-EAST-01', locationName: 'East Store 1' })),
+      ...store2Data.map(item => ({ ...item, locationId: 'STORE-EAST-02', locationName: 'East Store 2' }))
+    ];
+
+    allData.forEach((item) => {
+      const metadata = productMetadata[item.productId];
+      if (metadata) {
+        const warning = getWarningLevel(item.available, metadata.threshold);
+        inventory.push({
+          sku: item.productId,
+          name: metadata.name,
+          spec: metadata.spec,
+          total: item.totalStock || 200,
+          available: item.available,
+          threshold: metadata.threshold,
+          warningLevel: warning.level,
+          warningLabel: warning.label,
+          store: item.locationName || metadata.store,
+          location: item.locationId,
+          locationId: item.locationId,
+          lastInDate: metadata.lastInDate,
+          restockAdvice: getRestockAdvice(item.available, metadata.threshold),
+          colors: metadata.colors,
+          sizes: metadata.sizes,
+          price: metadata.price,
+          icon: metadata.icon
+        });
+      }
+    });
+
+    // 提取所有门店名称用于筛选
+    const uniqueStores = [...new Set(inventory.map(item => item.store))];
+    stores.value = uniqueStores;
+
+    if (inventory.length > 0 && !selectedItem.value) {
+      selectedItem.value = inventory[0];
+    }
+  } catch (error) {
+    console.error('Failed to load inventory:', error);
+    window.alert('Failed to load inventory: ' + (error.message || 'Unknown error'));
+  } finally {
+    isLoading.value = false;
+  }
 };
 
 onMounted(() => {
-  refreshInventory();
+  loadInventory();
 });
 </script>
 
@@ -194,14 +296,6 @@ onMounted(() => {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
   gap: 24px;
-}
-
-.inventory > .card {
-  height: fit-content;
-}
-
-.inventory > .card:nth-child(1) {
-  grid-column: 1 / -1;
 }
 
 .inventory__filter-input {
@@ -224,7 +318,7 @@ onMounted(() => {
 .inventory__table-header,
 .inventory__table-row {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1fr;
+  grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
   gap: 12px;
   padding: 16px 20px;
   align-items: center;
@@ -263,6 +357,12 @@ onMounted(() => {
 .inventory__detail-item {
   display: flex;
   justify-content: space-between;
+}
+
+.empty {
+  padding: 48px;
+  text-align: center;
+  color: var(--color-text-muted);
 }
 
 @media (max-width: 960px) {

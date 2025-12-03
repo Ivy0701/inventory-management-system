@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import Inventory from '../models/Inventory.js';
+import TransferOrder from '../models/TransferOrder.js';
 
 // Product list matching frontend
 const PRODUCTS = [
@@ -10,9 +11,14 @@ const PRODUCTS = [
   { id: 'PROD-005', name: 'Polo Shirt' },
   { id: 'PROD-006', name: 'Jogger Pants' }
 ];
-
 // 默认用于订单模块的“门店”库存位置（不影响区域/总仓调拨）
-const DEFAULT_STORE_LOCATION_ID = 'STORE-DEFAULT';
+export const DEFAULT_STORE_LOCATION_ID = 'STORE-DEFAULT';
+
+// 生成调拨单号（与 transferController 中逻辑保持一致）
+const genTransferId = () => {
+  const now = new Date();
+  return `TRF-${now.toISOString().slice(0, 10).replace(/-/g, '')}-${Math.floor(Math.random() * 900 + 100)}`;
+};
 
 // 初始化库存：为每个商品在总仓创建一条记录（仅在首次运行时）
 // 插入位置：保持为 /api/inventory/initialize 路由对应的处理函数
@@ -128,6 +134,52 @@ export const updateInventoryQuantity = async (productId, quantityChange, locatio
     inventory.available = newAvailable;
     inventory.lastUpdated = new Date();
     await inventory.save();
+
+    // 自动为华东门店1生成补货调拨单：
+    // 条件：
+    //   - 位置为 STORE-EAST-01（华东门店1）
+    //   - 可用库存低于 60
+    //   - 且当前没有该商品、该门店的待发货/在途调拨单，避免重复创建
+    if (locationId === 'STORE-EAST-01' && inventory.available < 60) {
+      const targetStock = 180;
+      const replenishQty = targetStock - inventory.available;
+
+      if (replenishQty > 0) {
+        const existingTransfer = await TransferOrder.findOne({
+          productSku: productId,
+          toLocationId: 'STORE-EAST-01',
+          fromLocationId: 'WH-EAST',
+          status: { $in: ['PENDING', 'IN_TRANSIT'] }
+        });
+
+        if (!existingTransfer) {
+          const transferId = genTransferId();
+          await TransferOrder.create({
+            transferId,
+            productSku: productId,
+            productName: inventory.productName || productId,
+            quantity: replenishQty,
+            fromLocationId: 'WH-EAST',
+            fromLocationName: 'East Warehouse',
+            toLocationId: 'STORE-EAST-01',
+            toLocationName: inventory.locationName || 'East Store 1',
+            status: 'PENDING',
+            history: [
+              {
+                status: 'PENDING',
+                note: `Auto-created transfer: replenish ${replenishQty} units for low stock at STORE-EAST-01`
+              }
+            ],
+            inventoryUpdated: false,
+            requestId: null
+          });
+
+          console.log(
+            `Auto transfer order created for low stock: transferId=${transferId}, productId=${productId}, from=WH-EAST, to=STORE-EAST-01, quantity=${replenishQty}`
+          );
+        }
+      }
+    }
 
     console.log(
       `Inventory updated: productId=${productId}, locationId=${locationId}, oldAvailable=${oldAvailable}, newAvailable=${inventory.available}, totalStock=${inventory.totalStock}`

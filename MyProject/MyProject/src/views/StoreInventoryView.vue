@@ -91,9 +91,12 @@
 
 <script setup>
 import { reactive, ref, computed, onMounted } from 'vue';
-import { initializeInventory, getInventory } from '../services/inventoryService.js';
+import { useAppStore } from '../store/appStore';
+import { getInventoryByLocation } from '../services/inventoryService.js';
 
-const stores = ['Store A - Downtown', 'Store B - Shopping Mall', 'Store C - Airport'];
+const appStore = useAppStore();
+
+const stores = ref([]);
 
 // Product metadata (for display purposes)
 const productMetadata = {
@@ -219,17 +222,9 @@ const getRestockAdvice = (quantity, threshold) => {
 const loadInventory = async () => {
   isLoading.value = true;
   try {
-    // Fetch inventory from backend first
-    let data = await getInventory();
-    
-    // Only initialize if no inventory records exist
-    if (!data || data.length === 0) {
-      await initializeInventory();
-      // Fetch again after initialization
-      data = await getInventory();
-    }
-    
-    // Map backend data to frontend format
+    const locationId = appStore.user.assignedLocationId || 'STORE-EAST-01';
+    const data = await getInventoryByLocation(locationId);
+
     inventory.length = 0;
     data.forEach((item) => {
       const metadata = productMetadata[item.productId];
@@ -239,13 +234,13 @@ const loadInventory = async () => {
           sku: item.productId,
           name: metadata.name,
           spec: metadata.spec,
-          total: item.totalStock || 200, // Total Stock is always 200
-          available: item.available, // Available stock changes with shipping/returns
+          total: item.totalStock || 200,
+          available: item.available,
           threshold: metadata.threshold,
           warningLevel: warning.level,
           warningLabel: warning.label,
-          store: metadata.store,
-          location: metadata.location,
+          store: item.locationName || metadata.store,
+          location: item.locationId,
           lastInDate: metadata.lastInDate,
           restockAdvice: getRestockAdvice(item.available, metadata.threshold),
           colors: metadata.colors,
@@ -255,9 +250,16 @@ const loadInventory = async () => {
         });
       }
     });
-    
-    if (inventory.length > 0 && !selectedItem.value) {
-      selectedItem.value = inventory[0];
+
+    if (inventory.length > 0) {
+      const currentStoreName = inventory[0].store;
+      stores.value = [currentStoreName];
+      if (!filters.store) {
+        filters.store = '';
+      }
+      if (!selectedItem.value) {
+        selectedItem.value = inventory[0];
+      }
     }
   } catch (error) {
     console.error('Failed to load inventory:', error);

@@ -40,7 +40,7 @@ const resetStoreInventory = async () => {
           locationName: store.name,
           region: null,
           totalStock: 200,
-          available: 100,
+          available: 200,
           minThreshold: 60,
           maxThreshold: 200,
           lastUpdated: new Date()

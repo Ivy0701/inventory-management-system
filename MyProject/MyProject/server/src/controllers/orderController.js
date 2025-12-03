@@ -1,5 +1,5 @@
 import Order from '../models/Order.js';
-import { decreaseInventory, increaseInventory } from './inventoryController.js';
+import { decreaseInventory, increaseInventory, updateInventoryQuantity, DEFAULT_STORE_LOCATION_ID } from './inventoryController.js';
 
 const statusLabelMap = {
   pending: 'Pending',
@@ -102,6 +102,15 @@ export const createOrder = async (req, res, next) => {
       return res.status(400).json({ message: 'Invalid order amount' });
     }
 
+    // 根据收货地址国家/区号确定订单对应的库存位置
+    // 需求：香港（HK/+852）订单 → 华东门店1（STORE-EAST-01）；其他默认为线上门店 STORE-DEFAULT
+    const shippingCountry = shippingAddress?.country;
+    const shippingPhoneCode = shippingAddress?.phoneCode;
+    let inventoryLocationId = DEFAULT_STORE_LOCATION_ID;
+    if (shippingCountry === 'HK' || shippingPhoneCode === '+852') {
+      inventoryLocationId = 'STORE-EAST-01';
+    }
+
     const order = await Order.create({
       orderNumber: generateOrderNumber(),
       customerId,
@@ -112,6 +121,7 @@ export const createOrder = async (req, res, next) => {
       discount,
       totalAmount,
       remark,
+      inventoryLocationId,
       inventoryStatus: 'Inventory Checking',
       status: 'pending',
       timeline: buildTimeline('Order Created')
@@ -227,10 +237,13 @@ export const approveAfterSales = async (req, res, next) => {
     // Increase inventory for each item in the order (only for refund type, exchange doesn't change inventory)
     if (order.afterSales.type === 'refund') {
       try {
+        const inventoryLocationId = order.inventoryLocationId || DEFAULT_STORE_LOCATION_ID;
         for (const item of order.items) {
-          console.log(`Increasing inventory: productId=${item.productId}, quantity=${item.quantity}`);
-          await increaseInventory(item.productId, item.quantity);
-          console.log(`Inventory increased successfully for product ${item.productId}`);
+          console.log(
+            `Increasing inventory: productId=${item.productId}, quantity=${item.quantity}, locationId=${inventoryLocationId}`
+          );
+          await updateInventoryQuantity(item.productId, item.quantity, inventoryLocationId);
+          console.log(`Inventory increased successfully for product ${item.productId} at ${inventoryLocationId}`);
         }
       } catch (inventoryError) {
         console.error('Inventory update error:', inventoryError);
@@ -381,10 +394,13 @@ export const shipOrder = async (req, res, next) => {
 
     // Decrease inventory for each item in the order
     try {
+      const inventoryLocationId = order.inventoryLocationId || DEFAULT_STORE_LOCATION_ID;
       for (const item of order.items) {
-        console.log(`Decreasing inventory: productId=${item.productId}, quantity=${item.quantity}`);
-        await decreaseInventory(item.productId, item.quantity);
-        console.log(`Inventory decreased successfully for product ${item.productId}`);
+        console.log(
+          `Decreasing inventory: productId=${item.productId}, quantity=${item.quantity}, locationId=${inventoryLocationId}`
+        );
+        await updateInventoryQuantity(item.productId, -item.quantity, inventoryLocationId);
+        console.log(`Inventory decreased successfully for product ${item.productId} at ${inventoryLocationId}`);
       }
     } catch (inventoryError) {
       console.error('Inventory update error:', inventoryError);

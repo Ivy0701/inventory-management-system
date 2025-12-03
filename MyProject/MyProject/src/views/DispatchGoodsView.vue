@@ -257,13 +257,13 @@ const confirmDispatch = async () => {
       departure: dispatchPlan.departure,
       remark: dispatchPlan.remark
     });
-    inventoryStore.addDispatchUpdate({
+  inventoryStore.addDispatchUpdate({
       transferFrom: selectedShipment.value.fromLocationId,
       transferTo: selectedShipment.value.toLocationId,
-      quantity: dispatchPlan.dispatchQuantity,
+    quantity: dispatchPlan.dispatchQuantity,
       orderNo: selectedShipment.value.transferId,
       timestamp: new Date().toISOString()
-    });
+  });
     await loadTransfers();
     window.alert('Dispatch completed successfully');
   } catch (error) {

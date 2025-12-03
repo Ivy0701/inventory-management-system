@@ -4,36 +4,51 @@
 
 系统已自动创建预设的销售员、区域仓库管理员以及总仓库管理员账号，这些账号在服务器启动时自动初始化（如果不存在）。
 
-## 预设账号列表
+## 预设账号列表（最新）
 
-### 销售员账号
+### 销售员账号（门店员工）
 
-| 账号 | 密码 | 姓名 | 角色 |
-|------|------|------|------|
-| sales001 | 123456 | 销售员1 | sales |
-| sales002 | 123456 | 销售员2 | sales |
+> 开发调试推荐直接使用第 1 行账号：**东部门店销售员 1**。  
+> 该账号只关联 `East Store 1`，登录后可以完整体验门店销售 → 库存变动 → 自动补货 → 区域/总仓调拨的全流程。
+
+| 账号                 | 密码   | 姓名         | 角色  | 归属门店        |
+|----------------------|--------|--------------|-------|-----------------|
+| east_store1_sales_01 | 123456 | 华东销售1    | sales | East Store 1    |
+| east_store1_sales_02 | 123456 | 华东销售2    | sales | East Store 1    |
+| west_store1_sales_01 | 123456 | 西部销售1    | sales | West Store 1    |
+| west_store1_sales_02 | 123456 | 西部销售2    | sales | West Store 1    |
+| north_store1_sales_01| 123456 | 华北销售1    | sales | North Store 1   |
+| north_store1_sales_02| 123456 | 华北销售2    | sales | North Store 1   |
+| south_store1_sales_01| 123456 | 华南销售1    | sales | South Store 1   |
+| south_store1_sales_02| 123456 | 华南销售2    | sales | South Store 1   |
 
 ### 区域仓库管理员账号
 
-| 账号 | 密码 | 姓名 | 角色 |
-|------|------|------|------|
-| regional001 | 123456 | 区域仓库管理员1 | regionalManager |
-| regional002 | 123456 | 区域仓库管理员2 | regionalManager |
+| 账号            | 密码   | 姓名         | 角色            | 区域仓库        |
+|-----------------|--------|--------------|-----------------|-----------------|
+| east_manager_01 | 123456 | 华东仓管1    | regionalManager | East Warehouse  |
+| east_manager_02 | 123456 | 华东仓管2    | regionalManager | East Warehouse  |
+| west_manager_01 | 123456 | 西部仓管1    | regionalManager | West Warehouse  |
+| west_manager_02 | 123456 | 西部仓管2    | regionalManager | West Warehouse  |
+| north_manager_01| 123456 | 华北仓管1    | regionalManager | North Warehouse |
+| north_manager_02| 123456 | 华北仓管2    | regionalManager | North Warehouse |
+| south_manager_01| 123456 | 华南仓管1    | regionalManager | South Warehouse |
+| south_manager_02| 123456 | 华南仓管2    | regionalManager | South Warehouse |
 
 ### 总仓库管理员账号
 
-| 账号 | 密码 | 姓名 | 角色 |
-|------|------|------|------|
-| central001 | 123456 | 总仓库管理员1 | centralManager |
-| central002 | 123456 | 总仓库管理员2 | centralManager |
+| 账号       | 密码   | 姓名           | 角色           |
+|------------|--------|----------------|----------------|
+| central001 | 123456 | 总仓库管理员1  | centralManager |
+| central002 | 123456 | 总仓库管理员2  | centralManager |
 
 ## 使用说明
 
-### 1. 登录销售员账号
+### 1. 登录销售员账号（推荐：东部门店销售员1）
 
 1. 在首页选择"销售员"
 2. 点击"登录"按钮
-3. 输入账号：`sales001` 或 `sales002`
+3. 输入账号：`east_store1_sales_01`
 4. 输入密码：`123456`
 5. 输入验证码（不区分大小写）
 6. 点击"登录"
@@ -49,7 +64,7 @@
 
 1. 在首页选择"区域仓库管理员"
 2. 点击"登录"按钮
-3. 输入账号：`regional001` 或 `regional002`
+3. 输入账号：例如 `east_manager_01`、`west_manager_01` 等
 4. 输入密码：`123456`
 5. 输入验证码（不区分大小写）
 6. 点击"登录"
