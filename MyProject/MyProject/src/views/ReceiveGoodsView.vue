@@ -2,9 +2,9 @@
   <div class="receiving">
     <section class="card">
       <h2 class="section-title">Inbound Schedules</h2>
-      <div class="list">
+      <div class="list" v-if="!loading">
         <div
-          v-for="record in inboundPlans"
+          v-for="record in formattedPlans"
           :key="record.planNo"
           class="list-item receiving__plan"
           :class="{ 'receiving__plan--active': selectedPlan?.planNo === record.planNo }"
@@ -16,13 +16,14 @@
           </div>
           <div class="receiving__plan-body">
             <span>Supplier: {{ record.supplier }}</span>
-            <span>Expected Arrival: {{ record.eta }}</span>
+            <span>Expected Arrival: {{ record.etaText }}</span>
           </div>
           <div class="receiving__plan-meta">
             <span>Dock: {{ record.dock }}</span>
             <span>Items: {{ record.items }} SKU</span>
           </div>
         </div>
+        <p v-if="!formattedPlans.length" class="empty-hint">No inbound schedules</p>
       </div>
     </section>
 
@@ -55,7 +56,12 @@
         </div>
         <div class="form-group">
           <label class="form-label" for="storage">Storage Location</label>
-          <input id="storage" v-model="receivingRecord.storage" class="form-input" placeholder="Location code" />
+          <select id="storage" v-model="receivingRecord.storage" class="filter-pill">
+            <option value="">Select location</option>
+            <option v-for="option in storageOptions" :key="option.value" :value="option.value">
+              {{ option.label }}
+            </option>
+          </select>
         </div>
         <div class="form-group">
           <label class="form-label" for="remark">Remark</label>
@@ -68,59 +74,36 @@
     <section class="card">
       <h2 class="section-title">Recent Receiving Logs</h2>
       <div class="timeline">
-        <div v-for="log in logs" :key="log.id" class="timeline-item">
-          <span class="timeline-dot" :class="`timeline-dot--${log.result}`" />
+        <div v-for="log in formattedLogs" :key="log._id || log.id" class="timeline-item">
+          <span class="timeline-dot" :class="`timeline-dot--${log.status}`" />
           <div class="timeline-content">
             <span class="timeline-title">{{ log.title }}</span>
             <span class="timeline-desc">{{ log.desc }}</span>
             <span class="timeline-time">{{ log.time }}</span>
           </div>
         </div>
+        <p v-if="!formattedLogs.length" class="empty-hint">No receiving logs yet</p>
       </div>
     </section>
   </div>
 </template>
 
 <script setup>
-import { reactive, ref } from 'vue';
+import { reactive, ref, computed, onMounted } from 'vue';
 import { useInventoryStore } from '../store/inventoryStore';
+import {
+  fetchReceivingSchedules,
+  fetchReceivingLogs,
+  completeReceiving as completeReceivingApi
+} from '../services/receivingService';
 
 const inventoryStore = useInventoryStore();
 
-const inboundPlans = reactive([
-  {
-    planNo: 'INB-20251128-015',
-    supplier: 'JingCai Technology',
-    eta: '2025-11-28 10:00',
-    dock: 'A-03',
-    items: 24,
-    statusLabel: 'Arrived',
-    statusClass: 'success',
-    qualityLevel: 'A'
-  },
-  {
-    planNo: 'INB-20251127-042',
-    supplier: 'LianChuang Supply Chain',
-    eta: '2025-11-29 14:20',
-    dock: 'B-02',
-    items: 18,
-    statusLabel: 'In Transit',
-    statusClass: 'info',
-    qualityLevel: 'B'
-  },
-  {
-    planNo: 'INB-20251125-099',
-    supplier: 'HuaTeng Electronics',
-    eta: '2025-11-30 09:30',
-    dock: 'C-01',
-    items: 32,
-    statusLabel: 'Pending',
-    statusClass: 'warning',
-    qualityLevel: 'A'
-  }
-]);
+const inboundPlans = ref([]);
+const logs = ref([]);
+const loading = ref(false);
 
-const selectedPlan = ref(inboundPlans[0]);
+const selectedPlan = ref(null);
 
 const receivingRecord = reactive({
   received: 0,
@@ -130,28 +113,71 @@ const receivingRecord = reactive({
   remark: ''
 });
 
-const logs = reactive([
-  {
-    id: 'log-1',
-    title: 'INB-20251124-070 Completed',
-    desc: '45 SKU stocked at A-01 / A-02',
-    time: '2025-11-24 16:25',
-    result: 'success'
-  },
-  {
-    id: 'log-2',
-    title: 'INB-20251123-031 Exception',
-    desc: '3 pieces missing, notified supplier',
-    time: '2025-11-23 11:40',
-    result: 'warning'
-  }
-]);
+const storageOptions = [
+  { label: 'East Store 1', value: 'STORE-EAST-01' },
+  { label: 'East Store 2', value: 'STORE-EAST-02' },
+  { label: 'West Store 1', value: 'STORE-WEST-01' },
+  { label: 'West Store 2', value: 'STORE-WEST-02' },
+  { label: 'South Store 1', value: 'STORE-SOUTH-01' },
+  { label: 'South Store 2', value: 'STORE-SOUTH-02' },
+  { label: 'North Store 1', value: 'STORE-NORTH-01' },
+  { label: 'North Store 2', value: 'STORE-NORTH-02' }
+];
+
+const statusLabelMap = {
+  PENDING: 'Pending',
+  IN_TRANSIT: 'In Transit',
+  ARRIVED: 'Arrived'
+};
+
+const statusClassMap = {
+  PENDING: 'warning',
+  IN_TRANSIT: 'info',
+  ARRIVED: 'success'
+};
+
+const formatStatusLabel = (status) => statusLabelMap[status] || status;
+const formatStatusClass = (status) => statusClassMap[status] || 'default';
+
+const formattedPlans = computed(() =>
+  inboundPlans.value.map((plan) => ({
+    ...plan,
+    statusLabel: formatStatusLabel(plan.status),
+    statusClass: formatStatusClass(plan.status),
+    etaText: new Date(plan.eta).toLocaleString()
+  }))
+);
+
+const formattedLogs = computed(() =>
+  logs.value.map((log) => ({
+    ...log,
+    title: `${log.planNo} ${log.status === 'warning' ? 'Exception' : 'Completed'}`,
+    desc: `${log.qualified} qualified / ${log.received} received @ ${log.storageLocationId}${
+      log.issue ? ` (${log.issue})` : ''
+    }`,
+    time: new Date(log.timestamp).toLocaleString()
+  }))
+);
 
 const selectPlan = (plan) => {
   selectedPlan.value = plan;
 };
 
-const completeReceiving = () => {
+const loadReceivingData = async () => {
+  loading.value = true;
+  try {
+    const [scheduleData, logData] = await Promise.all([fetchReceivingSchedules(), fetchReceivingLogs()]);
+    inboundPlans.value = scheduleData;
+    logs.value = logData;
+    selectedPlan.value = scheduleData[0] || null;
+  } catch (error) {
+    console.error(error);
+  } finally {
+    loading.value = false;
+  }
+};
+
+const completeReceiving = async () => {
   if (!selectedPlan.value) {
     window.alert('Please select an inbound plan');
     return;
@@ -160,65 +186,48 @@ const completeReceiving = () => {
     window.alert('Please fill in receiving quantities and storage location');
     return;
   }
-
-  // Add to Recent Receiving Logs
-  const now = new Date();
-  const timeStr = now.toLocaleString('en-US', { 
-    year: 'numeric', 
-    month: '2-digit', 
-    day: '2-digit', 
-    hour: '2-digit', 
-    minute: '2-digit',
-    hour12: false 
-  }).replace(',', '');
-
-  const hasIssue = receivingRecord.issue && receivingRecord.issue !== '';
-  const logEntry = {
-    id: `log-${Date.now()}`,
-    title: `${selectedPlan.value.planNo} Completed`,
-    desc: hasIssue 
-      ? `${receivingRecord.qualified} SKU qualified, ${receivingRecord.received - receivingRecord.qualified} exceptions (${receivingRecord.issue}), stored at ${receivingRecord.storage}`
-      : `${receivingRecord.qualified} SKU stocked at ${receivingRecord.storage}`,
-    time: timeStr,
-    result: hasIssue ? 'warning' : 'success'
-  };
-
-  logs.unshift(logEntry);
-
-  // Store receiving update for inventory synchronization
-  inventoryStore.addReceivingUpdate({
-    planNo: selectedPlan.value.planNo,
-    supplier: selectedPlan.value.supplier,
-    received: receivingRecord.received,
-    qualified: receivingRecord.qualified,
-    storage: receivingRecord.storage,
-    timestamp: now.toISOString()
-  });
-
-  // Update plan status
-  if (selectedPlan.value) {
-    selectedPlan.value.statusLabel = 'Completed';
-    selectedPlan.value.statusClass = 'success';
+  if (receivingRecord.qualified > receivingRecord.received) {
+    window.alert('Qualified Quantity cannot exceed Received Quantity');
+    return;
   }
 
-  // Remove from inbound plans if completed
-  const index = inboundPlans.findIndex(p => p.planNo === selectedPlan.value.planNo);
-  if (index > -1 && selectedPlan.value.statusLabel === 'Completed') {
-    inboundPlans.splice(index, 1);
+  try {
+    await completeReceivingApi(selectedPlan.value.planNo, {
+      received: receivingRecord.received,
+      qualified: receivingRecord.qualified,
+      issue: receivingRecord.issue,
+      storageLocationId: receivingRecord.storage,
+      remark: receivingRecord.remark
+    });
+
+    inventoryStore.addReceivingUpdate({
+      planNo: selectedPlan.value.planNo,
+      supplier: selectedPlan.value.supplier,
+      received: receivingRecord.received,
+      qualified: receivingRecord.qualified,
+      storage: receivingRecord.storage,
+      timestamp: new Date().toISOString()
+    });
+
+    await loadReceivingData();
+
+    Object.assign(receivingRecord, {
+      received: 0,
+      qualified: 0,
+      issue: '',
+      storage: '',
+      remark: ''
+    });
+
+    window.alert('Receiving completed successfully');
+  } catch (error) {
+    window.alert(error.message || 'Failed to complete receiving');
   }
-
-  // Reset form
-  selectedPlan.value = inboundPlans[0] || null;
-  Object.assign(receivingRecord, {
-    received: 0,
-    qualified: 0,
-    issue: '',
-    storage: '',
-    remark: ''
-  });
-
-  window.alert('Receiving completed successfully');
 };
+
+onMounted(() => {
+  loadReceivingData();
+});
 </script>
 
 <style scoped>
@@ -279,6 +288,14 @@ const completeReceiving = () => {
 
 .timeline-dot--warning {
   background-color: var(--color-warning);
+}
+
+.empty-hint {
+  margin: 0;
+  padding: 12px 0;
+  color: var(--color-text-muted);
+  font-size: 14px;
+  text-align: center;
 }
 
 @media (max-width: 960px) {

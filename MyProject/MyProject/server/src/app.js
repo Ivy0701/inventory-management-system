@@ -5,10 +5,15 @@ import connectDb from './config/db.js';
 import orderRoutes from './routes/orderRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import inventoryRoutes from './routes/inventoryRoutes.js';
+import transferRoutes from './routes/transferRoutes.js';
+import receivingRoutes from './routes/receivingRoutes.js';
+import replenishmentRoutes from './routes/replenishmentRoutes.js';
 import { initDefaultUsers } from './scripts/initDefaultUsers.js';
+import { initOperationalData } from './scripts/initOperationalData.js';
 
 connectDb();
 initDefaultUsers();
+initOperationalData();
 
 const app = express();
 
@@ -23,6 +28,9 @@ app.get('/', (_req, res) => {
 app.use('/api/orders', orderRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/inventory', inventoryRoutes);
+app.use('/api/transfer-orders', transferRoutes);
+app.use('/api/receiving', receivingRoutes);
+app.use('/api/replenishments', replenishmentRoutes);
 
 app.use((err, _req, res, _next) => {
   console.error(err);

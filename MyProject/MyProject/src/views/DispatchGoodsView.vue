@@ -1,39 +1,50 @@
 <template>
   <div class="dispatch">
     <section class="card">
-      <h2 class="section-title">Pending Dispatch Orders</h2>
+      <h2 class="section-title">{{ $t('dispatch.pendingTitle') }}</h2>
       <div class="list">
         <div
           v-for="order in pendingShipments"
-          :key="order.orderNo"
+          :key="order.transferId"
           class="list-item dispatch__order"
-          :class="{ 'dispatch__order--active': selectedShipment?.orderNo === order.orderNo }"
+          :class="{ 'dispatch__order--active': selectedShipment?.transferId === order.transferId }"
           @click="selectShipment(order)"
         >
           <div class="dispatch__order-header">
-            <span>{{ order.orderNo }}</span>
-            <span class="tag" :class="order.priority">{{ order.priorityLabel }}</span>
+            <span>{{ order.transferId }}</span>
+            <span class="tag" :class="formatStatusClass(order.status)">{{ formatStatusLabel(order.status) }}</span>
           </div>
           <div class="dispatch__order-body">
-            <span>Destination: {{ order.destination }}</span>
-            <span>Items: {{ order.items }} SKU</span>
+            <span>SKU: {{ order.productSku }}</span>
+            <span>Destination: {{ order.toLocationName }}</span>
+            <span>Items: {{ order.quantity }} SKU</span>
           </div>
           <div class="dispatch__order-meta">
-            <span>Planned Departure: {{ order.departure }}</span>
-            <span>Carrier: {{ order.carrier }}</span>
+            <span>Planned Departure: {{ order.dispatchInfo?.departure || 'Not set' }}</span>
+            <span>Carrier: {{ order.dispatchInfo?.carrier || '--' }}</span>
           </div>
         </div>
       </div>
     </section>
 
     <section class="card">
-      <h2 class="section-title">Dispatch Arrangement</h2>
+      <h2 class="section-title">{{ $t('dispatch.arrangementTitle') }}</h2>
       <div v-if="selectedShipment" class="dispatch__summary">
-        <div><strong>Order:</strong> {{ selectedShipment.orderNo }}</div>
-        <div><strong>Destination:</strong> {{ selectedShipment.destination }}</div>
-        <div><strong>Priority:</strong> {{ selectedShipment.priorityLabel }}</div>
+        <div><strong>Order:</strong> {{ selectedShipment.transferId }}</div>
+        <div><strong>Destination:</strong> {{ selectedShipment.toLocationName }}</div>
+        <div><strong>Status:</strong> {{ formatStatusLabel(selectedShipment.status) }}</div>
       </div>
       <form class="dispatch__form" @submit.prevent="confirmDispatch">
+        <div class="form-group">
+          <label class="form-label" for="productSku">Product SKU *</label>
+          <input
+            id="productSku"
+            v-model="dispatchPlan.productSku"
+            class="form-input"
+            placeholder="PROD-001"
+            required
+          />
+        </div>
         <div class="form-group">
           <label class="form-label" for="transferFrom">Transfer From *</label>
           <select id="transferFrom" v-model="dispatchPlan.transferFrom" class="filter-pill" required>
@@ -91,12 +102,12 @@
             placeholder="Handling notes"
           />
         </div>
-        <button class="btn-primary" type="submit">Confirm Dispatch</button>
+        <button class="btn-primary" type="submit">{{ $t('dispatch.confirmDispatch') }}</button>
       </form>
     </section>
 
     <section class="card">
-      <h2 class="section-title">Dispatch History</h2>
+      <h2 class="section-title">{{ $t('dispatch.historyTitle') }}</h2>
       <div class="timeline">
         <div v-for="record in history" :key="record.id" class="timeline-item">
           <span class="timeline-dot" />
@@ -112,59 +123,64 @@
 </template>
 
 <script setup>
-import { reactive, ref } from 'vue';
+import { reactive, ref, computed, onMounted } from 'vue';
 import { useInventoryStore } from '../store/inventoryStore';
+import { useAppStore } from '../store/appStore';
+import { fetchTransfers, dispatchTransfer } from '../services/transferService';
 
 const inventoryStore = useInventoryStore();
+const appStore = useAppStore();
 
 const carriers = ['Sunshine Logistics', 'East Freight', 'Atlas Transport'];
 
-const warehouses = ['西部仓库', '东部仓库', '北部仓库', '南部仓库'];
+const warehouseLocationMap = {
+  'West Warehouse': 'WH-WEST',
+  'East Warehouse': 'WH-EAST',
+  'North Warehouse': 'WH-NORTH',
+  'South Warehouse': 'WH-SOUTH'
+};
 
-const stores = [
-  '西部门店1',
-  '西部门店2',
-  '东部门店1',
-  '东部门店2',
-  '北部门店1',
-  '北部门店2',
-  '南部门店1',
-  '南部门店2'
-];
+const storeLocationMap = {
+  'West Store 1': 'STORE-WEST-01',
+  'West Store 2': 'STORE-WEST-02',
+  'East Store 1': 'STORE-EAST-01',
+  'East Store 2': 'STORE-EAST-02',
+  'North Store 1': 'STORE-NORTH-01',
+  'North Store 2': 'STORE-NORTH-02',
+  'South Store 1': 'STORE-SOUTH-01',
+  'South Store 2': 'STORE-SOUTH-02',
+  'East Warehouse': 'WH-EAST',
+  'West Warehouse': 'WH-WEST',
+  'North Warehouse': 'WH-NORTH',
+  'South Warehouse': 'WH-SOUTH'
+};
 
-const pendingShipments = reactive([
-  {
-    orderNo: 'DISP-20251128-901',
-    destination: 'East China Flagship Store',
-    items: 42,
-    departure: '2025-11-28 15:30',
-    carrier: 'Sunshine Logistics',
-    priority: 'warning',
-    priorityLabel: 'Urgent'
-  },
-  {
-    orderNo: 'DISP-20251126-510',
-    destination: 'South China Wholesale Center',
-    items: 27,
-    departure: '2025-11-29 09:00',
-    carrier: 'East Freight',
-    priority: 'default',
-    priorityLabel: 'Normal'
-  },
-  {
-    orderNo: 'DISP-20251125-318',
-    destination: 'Northwest Regional Partner',
-    items: 18,
-    departure: '2025-11-29 13:45',
-    carrier: 'Atlas Transport',
-    priority: 'info',
-    priorityLabel: 'Scheduled'
-  }
-]);
+const warehouses = Object.keys(warehouseLocationMap);
+const stores = Object.keys(storeLocationMap);
 
-const selectedShipment = ref(pendingShipments[0]);
+const transfers = ref([]);
+const loading = ref(false);
+
+const statusLabelMap = {
+  PENDING: 'Pending',
+  IN_TRANSIT: 'In Transit',
+  COMPLETED: 'Completed'
+};
+
+const statusClassMap = {
+  PENDING: 'warning',
+  IN_TRANSIT: 'info',
+  COMPLETED: 'success'
+};
+
+const formatStatusLabel = (status) => statusLabelMap[status] || status;
+const formatStatusClass = (status) => statusClassMap[status] || 'default';
+
+const pendingShipments = computed(() => transfers.value.filter((item) => item.status === 'PENDING'));
+const selectedShipment = ref(null);
 
 const dispatchPlan = reactive({
+  productSku: '',
   transferFrom: '',
   transferTo: '',
   dispatchQuantity: null,
@@ -174,88 +190,90 @@ const dispatchPlan = reactive({
   remark: ''
 });
 
-const history = reactive([
-  {
-    id: 'his-1',
-    title: 'DISP-20251122-110 Dispatched',
-    desc: 'Sent to Central Retail Hub via Sunshine Logistics',
-    time: '2025-11-22 14:20'
-  },
-  {
-    id: 'his-2',
-    title: 'DISP-20251120-088 Dispatched',
-    desc: 'Sent to South China Distribution Center',
-    time: '2025-11-20 09:10'
-  }
-]);
+const history = computed(() => {
+  return transfers.value
+    .flatMap((transfer) =>
+      (transfer.history || []).map((entry) => ({
+        id: `${transfer.transferId}-${entry.createdAt}`,
+        title: `${transfer.transferId} ${entry.status}`,
+        desc: entry.note || `${transfer.productSku} ${transfer.quantity} units`,
+        time: new Date(entry.createdAt || entry.timestamp).toLocaleString(),
+        createdAt: entry.createdAt || entry.timestamp
+      }))
+    )
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    .slice(0, 10);
+});
 
 const selectShipment = (order) => {
   selectedShipment.value = order;
+  dispatchPlan.productSku = order.productSku;
+  dispatchPlan.transferFrom =
+    Object.keys(warehouseLocationMap).find((key) => warehouseLocationMap[key] === order.fromLocationId) ||
+    order.fromLocationName ||
+    '';
+  dispatchPlan.transferTo =
+    Object.keys(storeLocationMap).find((key) => storeLocationMap[key] === order.toLocationId) ||
+    order.toLocationName ||
+    '';
+  dispatchPlan.dispatchQuantity = order.quantity;
 };
 
-const confirmDispatch = () => {
+const loadTransfers = async () => {
+  loading.value = true;
+  try {
+    const locationId = appStore.user.assignedLocationId || 'WH-EAST';
+    transfers.value = await fetchTransfers(locationId);
+    selectedShipment.value = pendingShipments.value[0] || null;
+    if (selectedShipment.value) {
+      selectShipment(selectedShipment.value);
+    }
+  } catch (error) {
+    console.error(error);
+  } finally {
+    loading.value = false;
+  }
+};
+
+const confirmDispatch = async () => {
   if (!selectedShipment.value) {
     window.alert('Please select a shipment order');
     return;
   }
-  if (!dispatchPlan.transferFrom || !dispatchPlan.transferTo || !dispatchPlan.dispatchQuantity) {
-    window.alert('Please complete required fields: Transfer From, Transfer To, and Dispatch Quantity');
+  if (!dispatchPlan.productSku || !dispatchPlan.dispatchQuantity) {
+    window.alert('Please complete required fields: Product SKU, quantity');
     return;
   }
+
   if (dispatchPlan.dispatchQuantity <= 0) {
     window.alert('Dispatch Quantity must be greater than 0');
     return;
   }
 
-  // Add to Dispatch History
-  const now = new Date();
-  const timeStr = now.toLocaleString('en-US', { 
-    year: 'numeric', 
-    month: '2-digit', 
-    day: '2-digit', 
-    hour: '2-digit', 
-    minute: '2-digit',
-    hour12: false 
-  }).replace(',', '');
-  
-  const historyEntry = {
-    id: `his-${Date.now()}`,
-    title: `${selectedShipment.value.orderNo} Dispatched`,
-    desc: `Transferred ${dispatchPlan.dispatchQuantity} units from ${dispatchPlan.transferFrom} to ${dispatchPlan.transferTo}${dispatchPlan.carrier ? ` via ${dispatchPlan.carrier}` : ''}`,
-    time: timeStr
-  };
-  
-  history.unshift(historyEntry);
-  
-  // Store dispatch update for inventory synchronization
-  inventoryStore.addDispatchUpdate({
-    transferFrom: dispatchPlan.transferFrom,
-    transferTo: dispatchPlan.transferTo,
-    quantity: dispatchPlan.dispatchQuantity,
-    orderNo: selectedShipment.value.orderNo,
-    timestamp: now.toISOString()
-  });
-
-  // Remove from pending shipments
-  const index = pendingShipments.findIndex(s => s.orderNo === selectedShipment.value.orderNo);
-  if (index > -1) {
-    pendingShipments.splice(index, 1);
+  try {
+    await dispatchTransfer(selectedShipment.value.transferId, {
+      carrier: dispatchPlan.carrier,
+      dock: dispatchPlan.dock,
+      departure: dispatchPlan.departure,
+      remark: dispatchPlan.remark
+    });
+    inventoryStore.addDispatchUpdate({
+      transferFrom: selectedShipment.value.fromLocationId,
+      transferTo: selectedShipment.value.toLocationId,
+      quantity: dispatchPlan.dispatchQuantity,
+      orderNo: selectedShipment.value.transferId,
+      timestamp: new Date().toISOString()
+    });
+    await loadTransfers();
+    window.alert('Dispatch completed successfully');
+  } catch (error) {
+    window.alert(error.message || 'Failed to dispatch order');
   }
-
-  // Reset form and selection
-  selectedShipment.value = pendingShipments[0] || null;
-  Object.assign(dispatchPlan, {
-    transferFrom: '',
-    transferTo: '',
-    dispatchQuantity: null,
-    carrier: '',
-    dock: '',
-    departure: '',
-    remark: ''
-  });
-
-  window.alert(`Order ${selectedShipment.value?.orderNo || 'dispatch'} confirmed successfully`);
 };
+
+onMounted(() => {
+  loadTransfers();
+});
 </script>
 
 <style scoped>

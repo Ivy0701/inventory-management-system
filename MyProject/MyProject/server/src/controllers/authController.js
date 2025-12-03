@@ -15,11 +15,15 @@ const createToken = (user) => {
   );
 };
 
+// 返回给前端的用户结构中增加库存相关字段，方便前端在调用库存接口时携带权限信息
 const sanitizeUser = (user) => ({
   id: user._id.toString(),
   account: user.account,
   name: user.name,
-  role: user.role
+  role: user.role,
+  assignedLocationId: user.assignedLocationId || null,
+  region: user.region || null,
+  accessibleLocationIds: Array.isArray(user.accessibleLocationIds) ? user.accessibleLocationIds : []
 });
 
 export const register = async (req, res, next) => {

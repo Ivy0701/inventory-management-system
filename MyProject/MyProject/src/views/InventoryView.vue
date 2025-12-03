@@ -1,42 +1,42 @@
 <template>
   <div class="inventory">
     <section class="card">
-      <h2 class="section-title">Filter Conditions</h2>
+      <h2 class="section-title">{{ $t('inventory.filterTitle') }}</h2>
       <div class="filter-bar">
         <input
           v-model="filters.sku"
           class="form-input inventory__filter-input"
-          placeholder="Product ID"
+          :placeholder="$t('inventory.productIdPlaceholder')"
           @input="applyFilters"
         />
         <input
           v-model="filters.name"
           class="form-input inventory__filter-input"
-          placeholder="Product Name"
+          :placeholder="$t('inventory.productNamePlaceholder')"
           @input="applyFilters"
         />
         <select v-model="filters.warehouse" class="filter-pill inventory__filter-picker" @change="applyFilters">
-          <option value="">Warehouse: All</option>
+          <option value="">{{ $t('inventory.warehouseAll') }}</option>
           <option v-for="warehouse in warehouses" :key="warehouse" :value="warehouse">
             Warehouse: {{ warehouse }}
           </option>
         </select>
         <select v-model="filters.status" class="filter-pill inventory__filter-picker" @change="applyFilters">
-          <option value="">Status: All</option>
-          <option value="正常">Status: Normal</option>
-          <option value="低库存">Status: Low Stock</option>
-          <option value="缺货">Status: Out of Stock</option>
+          <option value="">{{ $t('inventory.statusAll') }}</option>
+          <option value="Normal">{{ $t('inventory.statusNormal') }}</option>
+          <option value="Low Stock">{{ $t('inventory.statusLow') }}</option>
+          <option value="Out of Stock">{{ $t('inventory.statusOut') }}</option>
         </select>
       </div>
       <div class="quick-actions">
-        <button class="btn-primary" type="button" @click="onAddProduct">Add Product</button>
-        <button class="btn-secondary" type="button" @click="onImport">Import Inventory</button>
-        <button class="btn-secondary" type="button" @click="onExport">Export Inventory</button>
+        <button class="btn-primary" type="button" @click="onAddProduct">{{ $t('inventory.addProduct') }}</button>
+        <button class="btn-secondary" type="button" @click="onImport">{{ $t('inventory.importInventory') }}</button>
+        <button class="btn-secondary" type="button" @click="onExport">{{ $t('inventory.exportInventory') }}</button>
       </div>
     </section>
 
     <section class="card">
-      <h2 class="section-title">Inventory List</h2>
+      <h2 class="section-title">{{ $t('inventory.listTitle') }}</h2>
       <div class="inventory__table">
         <div class="inventory__table-header">
           <span class="col col-wide">Product</span>
@@ -66,7 +66,7 @@
     </section>
 
     <section v-if="selectedItem" class="card">
-      <h2 class="section-title">Inventory Details</h2>
+      <h2 class="section-title">{{ $t('inventory.detailTitle') }}</h2>
       <div class="list">
         <div class="list-item inventory__detail-item">
           <span>Price: ${{ selectedItem.price }}</span>
@@ -91,121 +91,18 @@
 </template>
 
 <script setup>
-import { reactive, ref, computed } from 'vue';
+// 数据来源改为后端接口：GET /api/inventory/:locationId
+// 插入位置：原有静态 inventory 数组所在的 <script setup> 中
+import { reactive, ref, onMounted } from 'vue';
+import { useAppStore } from '../store/appStore';
+import { getInventoryByLocation } from '../services/inventoryService';
+
+const appStore = useAppStore();
 
 const warehouses = ['East China Warehouse', 'South China Warehouse', 'Northwest Warehouse'];
 
-// 使用与顾客页面相同的商品数据
-const inventory = reactive([
-  {
-    sku: 'PROD-001',
-    name: 'Casual T-Shirt',
-    spec: 'S/M/L/XL',
-    total: 120,
-    available: 98,
-    threshold: 80,
-    warningLevel: 'default',
-    warningLabel: 'Normal',
-    warehouse: 'East China Warehouse',
-    location: 'A区-03-05',
-    lastInDate: '2024-01-12',
-    restockAdvice: 'No restock needed',
-    colors: ['Black', 'White', 'Blue', 'Red', 'Gray'],
-    sizes: ['S', 'M', 'L', 'XL'],
-    price: 29.99,
-    icon: '👕'
-  },
-  {
-    sku: 'PROD-002',
-    name: 'Classic Denim Jeans',
-    spec: '28/30/32/34/36',
-    total: 85,
-    available: 65,
-    threshold: 50,
-    warningLevel: 'warning',
-    warningLabel: 'Low Stock',
-    warehouse: 'South China Warehouse',
-    location: 'B区-01-02',
-    lastInDate: '2024-01-09',
-    restockAdvice: 'Suggest restock 20 pieces',
-    colors: ['Blue', 'Black', 'Gray'],
-    sizes: ['28', '30', '32', '34', '36'],
-    price: 59.99,
-    icon: '👖'
-  },
-  {
-    sku: 'PROD-003',
-    name: 'Hooded Sweatshirt',
-    spec: 'S/M/L/XL/XXL',
-    total: 45,
-    available: 30,
-    threshold: 50,
-    warningLevel: 'warning',
-    warningLabel: 'Low Stock',
-    warehouse: 'East China Warehouse',
-    location: 'A区-02-03',
-    lastInDate: '2024-01-10',
-    restockAdvice: 'Suggest restock 25 pieces',
-    colors: ['Black', 'Gray', 'Navy', 'Red'],
-    sizes: ['S', 'M', 'L', 'XL', 'XXL'],
-    price: 49.99,
-    icon: '🧥'
-  },
-  {
-    sku: 'PROD-004',
-    name: 'Chino Pants',
-    spec: '30/32/34/36/38',
-    total: 60,
-    available: 45,
-    threshold: 40,
-    warningLevel: 'default',
-    warningLabel: 'Normal',
-    warehouse: 'South China Warehouse',
-    location: 'B区-02-01',
-    lastInDate: '2024-01-11',
-    restockAdvice: 'No restock needed',
-    colors: ['Khaki', 'Navy', 'Black', 'Olive'],
-    sizes: ['30', '32', '34', '36', '38'],
-    price: 54.99,
-    icon: '👔'
-  },
-  {
-    sku: 'PROD-005',
-    name: 'Polo Shirt',
-    spec: 'S/M/L/XL',
-    total: 90,
-    available: 75,
-    threshold: 60,
-    warningLevel: 'default',
-    warningLabel: 'Normal',
-    warehouse: 'East China Warehouse',
-    location: 'A区-01-04',
-    lastInDate: '2024-01-13',
-    restockAdvice: 'No restock needed',
-    colors: ['White', 'Black', 'Navy', 'Green', 'Red'],
-    sizes: ['S', 'M', 'L', 'XL'],
-    price: 39.99,
-    icon: '👔'
-  },
-  {
-    sku: 'PROD-006',
-    name: 'Jogger Pants',
-    spec: 'S/M/L/XL',
-    total: 12,
-    available: 5,
-    threshold: 25,
-    warningLevel: 'danger',
-    warningLabel: 'Out of Stock',
-    warehouse: 'Northwest Warehouse',
-    location: 'C区-04-01',
-    lastInDate: '2024-01-05',
-    restockAdvice: 'Restock immediately 30 pieces',
-    colors: ['Black', 'Gray', 'Navy', 'Olive'],
-    sizes: ['S', 'M', 'L', 'XL'],
-    price: 44.99,
-    icon: '👖'
-  }
-]);
+// 后端返回的原始库存数据（按商品 + 位置）
+const inventory = reactive([]);
 
 const filters = reactive({
   sku: '',
@@ -214,8 +111,51 @@ const filters = reactive({
   status: ''
 });
 
-const filteredInventory = ref([...inventory]);
-const selectedItem = ref(filteredInventory.value[0] || null);
+const filteredInventory = ref([]);
+const selectedItem = ref(null);
+
+const mapWarning = (available, minThreshold) => {
+  if (available <= 0) {
+    return { level: 'danger', label: 'Out of Stock' };
+  }
+  if (typeof minThreshold === 'number' && available <= minThreshold) {
+    return { level: 'warning', label: 'Low Stock' };
+  }
+  return { level: 'default', label: 'Normal' };
+};
+
+const refreshInventory = async () => {
+  try {
+    const locationId = appStore.user.assignedLocationId || 'WH-EAST';
+    const data = await getInventoryByLocation(locationId);
+
+    inventory.splice(0, inventory.length, ...data.map((row) => {
+      const { level, label } = mapWarning(row.available, row.minThreshold);
+      return {
+        sku: row.productId,
+        name: row.productName,
+        total: row.totalStock,
+        available: row.available,
+        threshold: row.minThreshold ?? 0,
+        warningLevel: level,
+        warningLabel: label,
+        warehouse: row.locationName || row.locationId || 'Unknown',
+        location: row.locationId,
+        lastInDate: row.updatedAt || row.lastUpdated,
+        restockAdvice: label === 'Low Stock' || label === 'Out of Stock' ? 'Suggest restock' : 'No restock needed',
+        colors: [],
+        sizes: [],
+        price: row.price || 0,
+        icon: '📦'
+      };
+    }));
+
+    applyFilters();
+  } catch (error) {
+    console.error(error);
+    window.alert(error.message || 'Failed to load inventory');
+  }
+};
 
 const applyFilters = () => {
   filteredInventory.value = inventory.filter((item) => {
@@ -244,7 +184,9 @@ const onExport = () => {
   window.alert('Export report (demo)');
 };
 
-applyFilters();
+onMounted(() => {
+  refreshInventory();
+});
 </script>
 
 <style scoped>

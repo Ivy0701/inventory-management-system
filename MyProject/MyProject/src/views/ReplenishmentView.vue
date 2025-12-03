@@ -2,18 +2,18 @@
   <div class="replenishment">
     <section class="card">
       <h2 class="section-title">Inventory Replenishment Alerts</h2>
-      <div class="list">
+      <div class="list" v-if="!loading">
         <div
-          v-for="reminder in reminders"
-          :key="reminder.id"
+          v-for="reminder in alerts"
+          :key="reminder.alertId"
           class="list-item replenishment__reminder"
-          :class="{ 'replenishment__reminder--active': application.product === reminder.product }"
+          :class="{ 'replenishment__reminder--active': selectedAlertId === reminder.alertId }"
           @click="selectReminder(reminder)"
         >
           <div class="replenishment__reminder-header">
             <div style="display: flex; align-items: center; gap: 8px;">
               <span style="font-size: 24px;">{{ reminder.icon || '📦' }}</span>
-              <span>{{ reminder.product }}</span>
+              <span>{{ reminder.productName }}</span>
             </div>
             <span class="tag" :class="reminder.level">{{ reminder.levelLabel }}</span>
           </div>
@@ -23,12 +23,13 @@
           </div>
           <div class="replenishment__reminder-meta">
             <span>Trigger Reason: {{ reminder.trigger }}</span>
-            <span>Warehouse: {{ reminder.warehouse }}</span>
+            <span>Warehouse: {{ reminder.warehouseName }}</span>
           </div>
           <div v-if="reminder.threshold" class="replenishment__reminder-meta" style="margin-top: 4px;">
             <span>Safety Threshold: {{ reminder.threshold }}</span>
           </div>
         </div>
+        <p v-if="!alerts.length" class="empty-hint">No alerts</p>
       </div>
     </section>
 
@@ -85,68 +86,42 @@
     <section class="card">
       <h2 class="section-title">Processing Progress Tracking</h2>
       <div class="timeline replenishment__timeline">
-        <div v-for="item in progress" :key="item.title" class="timeline-item">
+        <div v-for="item in progress" :key="`${item.requestId}-${item.title}-${item.time}`" class="timeline-item">
           <span class="timeline-dot" :class="`timeline-dot--${item.status}`" />
           <div class="timeline-content">
             <span class="timeline-title">{{ item.title }}</span>
             <span class="timeline-desc">{{ item.desc }}</span>
-            <span class="timeline-time">{{ item.time }}</span>
+            <span class="timeline-time">{{ new Date(item.time).toLocaleString() }}</span>
           </div>
         </div>
+        <p v-if="!progress.length" class="empty-hint">No progress records</p>
       </div>
     </section>
   </div>
 </template>
 
 <script setup>
-import { reactive } from 'vue';
+import { reactive, ref, onMounted } from 'vue';
+import { useAppStore } from '../store/appStore';
+import {
+  fetchReplenishmentAlerts,
+  fetchReplenishmentProgress,
+  submitReplenishmentApplication
+} from '../services/replenishmentService';
 
-// 使用与顾客页面相同的商品数据
-const reminders = reactive([
-  {
-    id: 'REM-001',
-    product: 'Jogger Pants',
-    productId: 'PROD-006',
-    stock: 5,
-    suggested: 30,
-    trigger: 'Below safety threshold',
-    warehouse: 'Northwest Warehouse',
-    level: 'danger',
-    levelLabel: 'Urgent',
-    icon: '👖',
-    threshold: 25
-  },
-  {
-    id: 'REM-002',
-    product: 'Hooded Sweatshirt',
-    productId: 'PROD-003',
-    stock: 30,
-    suggested: 25,
-    trigger: 'Below safety threshold',
-    warehouse: 'East China Warehouse',
-    level: 'warning',
-    levelLabel: 'Warning',
-    icon: '🧥',
-    threshold: 50
-  },
-  {
-    id: 'REM-003',
-    product: 'Classic Denim Jeans',
-    productId: 'PROD-002',
-    stock: 65,
-    suggested: 20,
-    trigger: 'Abnormal sales growth',
-    warehouse: 'South China Warehouse',
-    level: 'warning',
-    levelLabel: 'Warning',
-    icon: '👖',
-    threshold: 50
-  }
-]);
+const appStore = useAppStore();
+
+const alerts = ref([]);
+const progress = ref([]);
+const loading = ref(false);
 
 const vendors = ['JingCai Technology', 'HuaTeng Electronics', 'LianChuang Supply Chain'];
 
+const selectedAlertId = ref(null);
+const selectedAlert = ref(null);
+
 const application = reactive({
+  productId: '',
   product: '',
   vendor: '',
   quantity: '',
@@ -154,89 +129,78 @@ const application = reactive({
   remark: ''
 });
 
-const progress = reactive([
-  {
-    title: 'Replenishment Alert Generated',
-    desc: 'System detected inventory below safety threshold',
-    time: '2024-01-11 09:15',
-    status: 'completed'
-  },
-  {
-    title: 'Application Submitted',
-    desc: 'Warehouse manager confirmed replenishment need',
-    time: '2024-01-11 10:05',
-    status: 'completed'
-  },
-  {
-    title: 'Under Approval',
-    desc: 'Waiting for procurement manager approval',
-    time: '2024-01-11 11:20',
-    status: 'processing'
-  },
-  {
-    title: 'Procurement Integration',
-    desc: 'Sync to procurement module after approval',
-    time: '--',
-    status: 'pending'
+const loadReplenishmentData = async () => {
+  loading.value = true;
+  try {
+    const [alertData, progressData] = await Promise.all([
+      fetchReplenishmentAlerts(),
+      fetchReplenishmentProgress()
+    ]);
+    alerts.value = alertData;
+    progress.value = progressData;
+    if (alerts.value.length > 0) {
+      selectReminder(alerts.value[0]);
+    }
+  } catch (error) {
+    console.error(error);
+  } finally {
+    loading.value = false;
   }
-]);
-
-const selectReminder = (reminder) => {
-  application.product = reminder.product;
-  application.quantity = reminder.suggested;
 };
 
-const submitApplication = () => {
-  if (!application.product || !application.vendor || !application.quantity || !application.deliveryDate) {
+const selectReminder = (reminder) => {
+  selectedAlertId.value = reminder.alertId;
+  selectedAlert.value = reminder;
+  application.product = reminder.productName;
+  application.productId = reminder.productId;
+  application.quantity = reminder.suggested;
+  application.vendor = reminder.suggestedVendor || vendors[0];
+  application.remark = reminder.trigger;
+};
+
+const submitApplication = async () => {
+  if (!application.productId || !application.vendor || !application.quantity || !application.deliveryDate) {
     window.alert('Please complete application information');
     return;
   }
 
-  // Add to Processing Progress Tracking
-  const now = new Date();
-  const timeStr = now.toLocaleString('en-US', { 
-    year: 'numeric', 
-    month: '2-digit', 
-    day: '2-digit', 
-    hour: '2-digit', 
-    minute: '2-digit',
-    hour12: false 
-  }).replace(',', '');
+  try {
+    const { alerts: updatedAlerts, progress: updatedProgress } = await submitReplenishmentApplication({
+      alertId: selectedAlertId.value,
+      productId: application.productId,
+      productName: application.product,
+      vendor: application.vendor,
+      quantity: Number(application.quantity),
+      deliveryDate: application.deliveryDate,
+      remark: application.remark,
+      warehouseId: selectedAlert.value?.warehouseId || appStore.user.assignedLocationId || 'WH-EAST',
+      warehouseName: selectedAlert.value?.warehouseName || 'Regional Warehouse',
+      reason: application.remark || selectedAlert.value?.trigger
+    });
 
-  // Add new application submitted entry
-  progress.splice(2, 0, {
-    title: 'Application Submitted',
-    desc: `${application.product}: ${application.quantity} units from ${application.vendor}, expected delivery ${application.deliveryDate}`,
-    time: timeStr,
-    status: 'completed'
-  });
+    alerts.value = updatedAlerts;
+    progress.value = updatedProgress;
 
-  // Update "Under Approval" status to processing with current time
-  const approvalIndex = progress.findIndex(p => p.title === 'Under Approval');
-  if (approvalIndex > -1) {
-    progress[approvalIndex].time = timeStr;
-    progress[approvalIndex].status = 'processing';
+    Object.assign(application, {
+      productId: '',
+      product: '',
+      vendor: '',
+      quantity: '',
+      deliveryDate: '',
+      remark: ''
+    });
+    selectedAlertId.value = null;
+    selectedAlert.value = null;
+
+    window.alert('Replenishment application submitted successfully');
+  } catch (error) {
+    window.alert(error.message || 'Failed to submit application');
   }
-
-  // Reset form
-  const selectedReminder = reminders.find(r => r.product === application.product);
-  if (selectedReminder) {
-    const reminderIndex = reminders.findIndex(r => r.id === selectedReminder.id);
-    if (reminderIndex > -1) {
-      reminders.splice(reminderIndex, 1);
-    }
-  }
-
-  Object.assign(application, {
-    product: '',
-    vendor: '',
-    quantity: '',
-    deliveryDate: '',
-    remark: ''
-  });
-
-  window.alert('Replenishment application submitted successfully');
 };
+
+onMounted(() => {
+  loadReplenishmentData();
+});
 </script>
 
 <style scoped>
@@ -295,6 +259,13 @@ const submitApplication = () => {
 
 .timeline-dot--pending {
   background-color: var(--color-border);
+}
+
+.empty-hint {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 14px;
+  text-align: center;
 }
 
 @media (max-width: 960px) {

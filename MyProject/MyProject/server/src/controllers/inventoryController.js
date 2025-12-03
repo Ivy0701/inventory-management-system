@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import Inventory from '../models/Inventory.js';
 
 // Product list matching frontend
@@ -10,97 +11,256 @@ const PRODUCTS = [
   { id: 'PROD-006', name: 'Jogger Pants' }
 ];
 
-// Initialize all products with 200 stock (only if not already initialized)
+// 默认用于订单模块的“门店”库存位置（不影响区域/总仓调拨）
+const DEFAULT_STORE_LOCATION_ID = 'STORE-DEFAULT';
+
+// 初始化库存：为每个商品在总仓创建一条记录（仅在首次运行时）
+// 插入位置：保持为 /api/inventory/initialize 路由对应的处理函数
 export const initializeInventory = async (req, res, next) => {
   try {
-    // Check if inventory already exists
     const existingCount = await Inventory.countDocuments();
     if (existingCount > 0) {
-      // Inventory already exists, don't reset it
       return res.json({ message: 'Inventory already initialized', alreadyExists: true });
     }
-    
-    // Only initialize if no inventory records exist
-    for (const product of PRODUCTS) {
-      await Inventory.create({
-        productId: product.id,
-        productName: product.name,
-        totalStock: 200,
-        available: 200
-      });
-    }
+
+    const docs = PRODUCTS.map((product) => ({
+      productId: product.id,
+      productName: product.name,
+      locationId: 'WH-CENTRAL',
+      locationName: 'Central Warehouse',
+      region: 'ALL',
+      totalStock: 200,
+      available: 200,
+      minThreshold: 10,
+      maxThreshold: 500
+    }));
+
+    await Inventory.insertMany(docs);
     res.json({ message: 'Inventory initialized successfully', alreadyExists: false });
   } catch (error) {
     next(error);
   }
 };
 
-// Get all inventory
+// 获取全部库存（仅用于后台统计界面）
 export const getInventory = async (req, res, next) => {
   try {
-    const inventory = await Inventory.find().sort({ productId: 1 });
+    const inventory = await Inventory.find().sort({ productId: 1, locationId: 1 });
     res.json(inventory);
   } catch (error) {
     next(error);
   }
 };
 
-// Get inventory by productId
-export const getInventoryByProductId = async (productId) => {
+// 根据位置获取库存：GET /api/inventory/:locationId
+export const getInventoryByLocation = async (req, res, next) => {
   try {
-    const inventory = await Inventory.findOne({ productId });
-    return inventory;
+    const { locationId } = req.params;
+    const user = req.user;
+
+    if (!user) {
+      return res.status(401).json({ message: 'Login required' });
+    }
+
+    // 简单权限：如果用户声明了 accessibleLocationIds，则只允许访问其中的仓库/门店
+    if (
+      Array.isArray(user.accessibleLocationIds) &&
+      user.accessibleLocationIds.length > 0 &&
+      !user.accessibleLocationIds.includes(locationId)
+    ) {
+      return res.status(403).json({ message: 'No permission to access this location inventory' });
+    }
+
+    const items = await Inventory.find({ locationId }).sort({ productId: 1 });
+    res.json(items);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// 按商品 + 位置查询单条库存
+export const getInventoryByProductAndLocation = async (productId, locationId) => {
+  try {
+    return await Inventory.findOne({ productId, locationId });
   } catch (error) {
     throw error;
   }
 };
 
-// Update inventory quantity (decrease or increase available stock)
-export const updateInventoryQuantity = async (productId, quantityChange) => {
+// 通用库存更新函数：在指定位置增减 available，同时做上下限校验
+export const updateInventoryQuantity = async (productId, quantityChange, locationId = DEFAULT_STORE_LOCATION_ID) => {
   try {
-    let inventory = await Inventory.findOne({ productId });
-    
-    // If inventory doesn't exist, initialize it with 200
+    let inventory = await Inventory.findOne({ productId, locationId });
+
+    // 不存在则初始化一条记录
     if (!inventory) {
-      console.log(`Inventory not found for product ${productId}, initializing with 200`);
-      const product = PRODUCTS.find(p => p.id === productId);
+      const product = PRODUCTS.find((p) => p.id === productId);
       if (!product) {
         throw new Error(`Product ${productId} not found in product list`);
       }
+
       inventory = await Inventory.create({
         productId: product.id,
         productName: product.name,
+        locationId,
         totalStock: 200,
-        available: 200
+        available: 200,
+        minThreshold: 0,
+        maxThreshold: 200
       });
     }
-    
+
     const newAvailable = inventory.available + quantityChange;
     if (newAvailable < 0) {
-      throw new Error(`Insufficient inventory for product ${productId}. Available: ${inventory.available}, Requested: ${-quantityChange}`);
+      throw new Error(
+        `Insufficient inventory for product ${productId} at ${locationId}. Available: ${inventory.available}, Requested: ${-quantityChange}`
+      );
     }
-    if (newAvailable > inventory.totalStock) {
-      throw new Error(`Cannot exceed total stock for product ${productId}. Total Stock: ${inventory.totalStock}, Requested: ${inventory.available + quantityChange}`);
+    if (typeof inventory.totalStock === 'number' && newAvailable > inventory.totalStock) {
+      throw new Error(
+        `Cannot exceed total stock for product ${productId} at ${locationId}. Total Stock: ${inventory.totalStock}, Requested: ${
+          inventory.available + quantityChange
+        }`
+      );
     }
-    
+
     const oldAvailable = inventory.available;
     inventory.available = newAvailable;
+    inventory.lastUpdated = new Date();
     await inventory.save();
-    console.log(`Inventory updated: productId=${productId}, oldAvailable=${oldAvailable}, newAvailable=${inventory.available}, totalStock=${inventory.totalStock}`);
+
+    console.log(
+      `Inventory updated: productId=${productId}, locationId=${locationId}, oldAvailable=${oldAvailable}, newAvailable=${inventory.available}, totalStock=${inventory.totalStock}`
+    );
     return inventory;
   } catch (error) {
-    console.error(`Error updating inventory for product ${productId}:`, error);
+    console.error(`Error updating inventory for product ${productId} at ${locationId}:`, error);
     throw error;
   }
 };
 
-// Decrease inventory (for shipping)
+// 订单模块仍然可以调用的简化接口：默认门店库存
+// 调用位置：server/src/controllers/orderController.js 中 shipOrder / approveAfterSales
 export const decreaseInventory = async (productId, quantity) => {
-  return await updateInventoryQuantity(productId, -quantity);
+  return await updateInventoryQuantity(productId, -quantity, DEFAULT_STORE_LOCATION_ID);
 };
 
-// Increase inventory (for returns)
 export const increaseInventory = async (productId, quantity) => {
-  return await updateInventoryQuantity(productId, quantity);
+  return await updateInventoryQuantity(productId, quantity, DEFAULT_STORE_LOCATION_ID);
+};
+
+// PATCH /api/inventory/update 用于销售出货场景（根据前端传入的位置）
+export const updateInventoryForSale = async (req, res, next) => {
+  try {
+    const { productId, locationId, quantityChange } = req.body;
+
+    if (!productId || !locationId || !quantityChange) {
+      return res.status(400).json({ message: 'productId, locationId and quantityChange are required' });
+    }
+
+    const user = req.user;
+    if (!user) {
+      return res.status(401).json({ message: 'Login required' });
+    }
+
+    const inventory = await updateInventoryQuantity(productId, quantityChange, locationId);
+    res.json(inventory);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// PATCH /api/inventory/transfer 仓库/门店之间调拨
+// 事务逻辑：减少 fromLocation 库存，增加 toLocation 库存，要么全部成功，要么全部回滚
+export const transferInventory = async (req, res, next) => {
+  const session = await mongoose.startSession();
+
+  try {
+    const { productId, fromLocationId, toLocationId, quantity } = req.body;
+
+    if (!productId || !fromLocationId || !toLocationId || !quantity) {
+      return res.status(400).json({ message: 'productId, fromLocationId, toLocationId and quantity are required' });
+    }
+
+    if (fromLocationId === toLocationId) {
+      return res.status(400).json({ message: 'fromLocationId and toLocationId cannot be the same' });
+    }
+
+    const user = req.user;
+    if (!user) {
+      return res.status(401).json({ message: 'Login required' });
+    }
+
+    // 简化权限控制：仅允许区域/总仓管理员进行调拨
+    if (!['regionalManager', 'centralManager', 'warehouse'].includes(user.role)) {
+      return res.status(403).json({ message: 'Only warehouse / regional / central managers can transfer inventory' });
+    }
+
+    await session.withTransaction(async () => {
+      // 1. 从来源位置扣减库存
+      const fromInventory = await Inventory.findOne({ productId, locationId: fromLocationId }).session(session);
+      if (!fromInventory) {
+        throw new Error(`Inventory not found for product ${productId} at ${fromLocationId}`);
+      }
+
+      if (fromInventory.available < quantity) {
+        throw new Error(
+          `Insufficient inventory at ${fromLocationId} for product ${productId}. Available: ${fromInventory.available}, Requested: ${quantity}`
+        );
+      }
+
+      fromInventory.available -= quantity;
+      fromInventory.lastUpdated = new Date();
+      await fromInventory.save({ session });
+
+      // 2. 目标位置增加库存（不存在则初始化）
+      let toInventory = await Inventory.findOne({ productId, locationId: toLocationId }).session(session);
+
+      if (!toInventory) {
+        const product = PRODUCTS.find((p) => p.id === productId);
+        if (!product) {
+          throw new Error(`Product ${productId} not found in product list`);
+        }
+
+        toInventory = new Inventory({
+          productId: productId,
+          productName: product ? product.name : fromInventory.productName,
+          locationId: toLocationId,
+          totalStock: fromInventory.totalStock,
+          available: 0,
+          minThreshold: fromInventory.minThreshold,
+          maxThreshold: fromInventory.maxThreshold
+        });
+      }
+
+      toInventory.available += quantity;
+      if (typeof toInventory.totalStock === 'number' && toInventory.available > toInventory.totalStock) {
+        throw new Error(
+          `Cannot exceed total stock for product ${productId} at ${toLocationId}. Total Stock: ${toInventory.totalStock}, Requested: ${toInventory.available}`
+        );
+      }
+
+      toInventory.lastUpdated = new Date();
+      await toInventory.save({ session });
+
+      res.json({
+        message: 'Transfer completed',
+        productId,
+        quantity,
+        from: {
+          locationId: fromLocationId,
+          available: fromInventory.available
+        },
+        to: {
+          locationId: toLocationId,
+          available: toInventory.available
+        }
+      });
+    });
+  } catch (error) {
+    next(error);
+  } finally {
+    session.endSession();
+  }
 };
 

@@ -1,46 +1,173 @@
 import bcrypt from 'bcryptjs';
 import User from '../models/User.js';
 
-// 预设账号配置
+// 预设账号配置（用于演示的多角色 + 库存权限）
+// 对应示例中的 users 集合：中央管理、区域管理、门店销售等
 const defaultUsers = [
-  // 销售员账号
-  {
-    account: 'sales001',
-    password: '123456',
-    name: '销售员1',
-    role: 'sales'
-  },
-  {
-    account: 'sales002',
-    password: '123456',
-    name: '销售员2',
-    role: 'sales'
-  },
-  // 区域仓库管理员账号
-  {
-    account: 'regional001',
-    password: '123456',
-    name: '区域仓库管理员1',
-    role: 'regionalManager'
-  },
-  {
-    account: 'regional002',
-    password: '123456',
-    name: '区域仓库管理员2',
-    role: 'regionalManager'
-  },
-  // 总仓库管理员账号
+  // 总仓库管理（可以查看/操作所有位置）
   {
     account: 'central001',
     password: '123456',
     name: '总仓库管理员1',
-    role: 'centralManager'
+    role: 'centralManager',
+    assignedLocationId: 'WH-CENTRAL',
+    region: 'ALL',
+    accessibleLocationIds: ['WH-CENTRAL', 'WH-EAST', 'WH-WEST', 'WH-NORTH', 'WH-SOUTH']
   },
   {
     account: 'central002',
     password: '123456',
     name: '总仓库管理员2',
-    role: 'centralManager'
+    role: 'centralManager',
+    assignedLocationId: 'WH-CENTRAL',
+    region: 'ALL',
+    accessibleLocationIds: ['WH-CENTRAL', 'WH-EAST', 'WH-WEST', 'WH-NORTH', 'WH-SOUTH']
+  },
+  // 区域仓库管理员（示例共 8 个）
+  {
+    account: 'east_manager_01',
+    password: '123456',
+    name: '华东仓管1',
+    role: 'regionalManager',
+    assignedLocationId: 'WH-EAST',
+    region: 'EAST',
+    accessibleLocationIds: ['WH-EAST', 'STORE-EAST-01', 'STORE-EAST-02']
+  },
+  {
+    account: 'east_manager_02',
+    password: '123456',
+    name: '华东仓管2',
+    role: 'regionalManager',
+    assignedLocationId: 'WH-EAST',
+    region: 'EAST',
+    accessibleLocationIds: ['WH-EAST', 'STORE-EAST-01', 'STORE-EAST-02']
+  },
+  {
+    account: 'west_manager_01',
+    password: '123456',
+    name: '西部仓管1',
+    role: 'regionalManager',
+    assignedLocationId: 'WH-WEST',
+    region: 'WEST',
+    accessibleLocationIds: ['WH-WEST', 'STORE-WEST-01', 'STORE-WEST-02']
+  },
+  {
+    account: 'west_manager_02',
+    password: '123456',
+    name: '西部仓管2',
+    role: 'regionalManager',
+    assignedLocationId: 'WH-WEST',
+    region: 'WEST',
+    accessibleLocationIds: ['WH-WEST', 'STORE-WEST-01', 'STORE-WEST-02']
+  },
+  {
+    account: 'north_manager_01',
+    password: '123456',
+    name: '华北仓管1',
+    role: 'regionalManager',
+    assignedLocationId: 'WH-NORTH',
+    region: 'NORTH',
+    accessibleLocationIds: ['WH-NORTH', 'STORE-NORTH-01', 'STORE-NORTH-02']
+  },
+  {
+    account: 'north_manager_02',
+    password: '123456',
+    name: '华北仓管2',
+    role: 'regionalManager',
+    assignedLocationId: 'WH-NORTH',
+    region: 'NORTH',
+    accessibleLocationIds: ['WH-NORTH', 'STORE-NORTH-01', 'STORE-NORTH-02']
+  },
+  {
+    account: 'south_manager_01',
+    password: '123456',
+    name: '华南仓管1',
+    role: 'regionalManager',
+    assignedLocationId: 'WH-SOUTH',
+    region: 'SOUTH',
+    accessibleLocationIds: ['WH-SOUTH', 'STORE-SOUTH-01', 'STORE-SOUTH-02']
+  },
+  {
+    account: 'south_manager_02',
+    password: '123456',
+    name: '华南仓管2',
+    role: 'regionalManager',
+    assignedLocationId: 'WH-SOUTH',
+    region: 'SOUTH',
+    accessibleLocationIds: ['WH-SOUTH', 'STORE-SOUTH-01', 'STORE-SOUTH-02']
+  },
+  // 销售员（共 8 个，每个门店 2 个销售员，4 家门店：East/West/North/South Store 1）
+  {
+    account: 'east_store1_sales_01',
+    password: '123456',
+    name: '华东销售1',
+    role: 'sales',
+    assignedLocationId: 'STORE-EAST-01',
+    region: 'EAST',
+    accessibleLocationIds: ['STORE-EAST-01']
+  },
+  {
+    account: 'east_store1_sales_02',
+    password: '123456',
+    name: '华东销售2',
+    role: 'sales',
+    assignedLocationId: 'STORE-EAST-01',
+    region: 'EAST',
+    accessibleLocationIds: ['STORE-EAST-01']
+  },
+  {
+    account: 'west_store1_sales_01',
+    password: '123456',
+    name: '华东销售3',
+    role: 'sales',
+    assignedLocationId: 'STORE-WEST-01',
+    region: 'WEST',
+    accessibleLocationIds: ['STORE-WEST-01']
+  },
+  {
+    account: 'west_store1_sales_02',
+    password: '123456',
+    name: '华东销售4',
+    role: 'sales',
+    assignedLocationId: 'STORE-WEST-01',
+    region: 'WEST',
+    accessibleLocationIds: ['STORE-WEST-01']
+  },
+  {
+    account: 'north_store1_sales_01',
+    password: '123456',
+    name: '西部销售1',
+    role: 'sales',
+    assignedLocationId: 'STORE-NORTH-01',
+    region: 'NORTH',
+    accessibleLocationIds: ['STORE-NORTH-01']
+  },
+  {
+    account: 'north_store1_sales_02',
+    password: '123456',
+    name: '西部销售2',
+    role: 'sales',
+    assignedLocationId: 'STORE-NORTH-01',
+    region: 'NORTH',
+    accessibleLocationIds: ['STORE-NORTH-01']
+  },
+  {
+    account: 'south_store1_sales_01',
+    password: '123456',
+    name: '西部销售3',
+    role: 'sales',
+    assignedLocationId: 'STORE-SOUTH-01',
+    region: 'SOUTH',
+    accessibleLocationIds: ['STORE-SOUTH-01']
+  },
+  {
+    account: 'south_store1_sales_02',
+    password: '123456',
+    name: '西部销售4',
+    role: 'sales',
+    assignedLocationId: 'STORE-SOUTH-01',
+    region: 'SOUTH',
+    accessibleLocationIds: ['STORE-SOUTH-01']
   }
 ];
 
@@ -49,7 +176,7 @@ export const initDefaultUsers = async () => {
   try {
     // 创建每个预设账号（如果不存在）
     for (const userData of defaultUsers) {
-      const { account, password, name, role } = userData;
+      const { account, password, name, role, assignedLocationId, region, accessibleLocationIds } = userData;
       
       // 检查账号是否已存在
       const existingUser = await User.findOne({ account });
@@ -66,7 +193,10 @@ export const initDefaultUsers = async () => {
         account,
         passwordHash,
         name,
-        role
+        role,
+        assignedLocationId,
+        region,
+        accessibleLocationIds
       });
       
       console.log(`✅ 自动创建预设账号: ${account} (${name}) - 角色: ${role}`);

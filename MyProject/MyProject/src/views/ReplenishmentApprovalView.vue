@@ -11,18 +11,22 @@
         </div>
         <div
           v-for="application in applications"
-          :key="application.id"
+          :key="application.requestId"
           class="approval__table-row"
-          :class="{ 'approval__table-row--active': selectedApplication?.id === application.id }"
+          :class="{ 'approval__table-row--active': selectedApplication?.requestId === application.requestId }"
           @click="selectApplication(application)"
         >
           <div class="col col-wide">
-            <div class="approval__row-title">{{ application.id }}</div>
-            <div class="approval__row-meta">{{ application.product }} · Trigger: {{ application.reason }}</div>
+            <div class="approval__row-title">{{ application.requestId }}</div>
+            <div class="approval__row-meta">{{ application.productName }} · Trigger: {{ application.reason }}</div>
           </div>
-          <span class="col">{{ application.warehouse }}</span>
+          <span class="col">{{ application.warehouseName }}</span>
           <span class="col">{{ application.quantity }}</span>
-          <span class="col"><span class="tag" :class="application.statusClass">{{ application.statusLabel }}</span></span>
+          <span class="col">
+            <span class="tag" :class="applicationStatusClass(application.status)">
+              {{ applicationStatusLabel(application.status) }}
+            </span>
+          </span>
         </div>
       </div>
     </section>
@@ -30,10 +34,12 @@
     <section v-if="selectedApplication" class="card">
       <h2 class="section-title">Application Details</h2>
       <div class="approval__detail">
-        <div><strong>Product:</strong> {{ selectedApplication.product }}</div>
-        <div><strong>Requested By:</strong> {{ selectedApplication.requester }}</div>
+        <div><strong>Product:</strong> {{ selectedApplication.productName }}</div>
+        <div><strong>Warehouse:</strong> {{ selectedApplication.warehouseName }}</div>
+        <div><strong>Restock Quantity:</strong> {{ selectedApplication.quantity }}</div>
         <div><strong>Suggested Vendor:</strong> {{ selectedApplication.vendor }}</div>
-        <div><strong>Expected Arrival:</strong> {{ selectedApplication.delivery }}</div>
+        <div><strong>Expected Arrival:</strong> {{ new Date(selectedApplication.deliveryDate).toLocaleDateString() }}</div>
+        <div><strong>Reason:</strong> {{ selectedApplication.reason || 'N/A' }}</div>
       </div>
       <div class="approval__decision">
         <label class="form-label">Decision</label>
@@ -51,7 +57,7 @@
     </section>
 
     <!-- Allocate Commodities Form - shown after approval -->
-    <section v-if="showAllocationForm && selectedApplication" class="card">
+    <section v-if="allocationFormVisible && selectedApplication" class="card">
       <h2 class="section-title">Allocate Commodities</h2>
       <form class="allocation__form" @submit.prevent="allocate">
         <div class="allocation__form-row">
@@ -119,10 +125,10 @@
       </div>
     </section>
 
-    <section class="card">
+    <section v-if="allocationHistory.length" class="card">
       <h2 class="section-title">Recent Allocations</h2>
       <div class="allocation__history">
-        <div v-for="record in history" :key="record.id" class="allocation__history-item">
+        <div v-for="record in allocationHistory" :key="record.id" class="allocation__history-item">
           <div class="allocation__history-header">
             <span>{{ record.id }}</span>
             <span class="tag" :class="record.statusClass">{{ record.status }}</span>
@@ -142,59 +148,35 @@
 </template>
 
 <script setup>
-import { reactive, ref } from 'vue';
+import { reactive, ref, computed, onMounted } from 'vue';
+import {
+  fetchReplenishmentApplications,
+  updateReplenishmentApplicationStatus
+} from '../services/replenishmentService';
+import { fetchTransfers, createTransferOrder } from '../services/transferService';
 
-const applications = reactive([
-  {
-    id: 'RA-20251128-018',
-    product: 'Jogger Pants',
-    warehouse: 'East China Warehouse',
-    quantity: 300,
-    reason: 'Below safety stock',
-    vendor: 'JingCai Technology',
-    requester: 'Regional Manager Zhang',
-    delivery: '2025-12-02',
-    statusClass: 'warning',
-    statusLabel: 'Pending'
-  },
-  {
-    id: 'RA-20251126-009',
-    product: 'Hooded Sweatshirt',
-    warehouse: 'South China Warehouse',
-    quantity: 200,
-    reason: 'Promotional demand',
-    vendor: 'HuaTeng Electronics',
-    requester: 'Regional Manager Liu',
-    delivery: '2025-12-03',
-    statusClass: 'info',
-    statusLabel: 'Under Review'
-  },
-  {
-    id: 'RA-20251124-021',
-    product: 'Classic Denim Jeans',
-    warehouse: 'Northwest Warehouse',
-    quantity: 150,
-    reason: 'Seasonal adjustment',
-    vendor: 'LianChuang Supply Chain',
-    requester: 'Regional Manager Chen',
-    delivery: '2025-12-01',
-    statusClass: 'info',
-    statusLabel: 'Under Review'
-  }
-]);
+const statusMap = {
+  PENDING: { label: 'Waiting', class: 'warning' },
+  PROCESSING: { label: 'Processing', class: 'info' },
+  APPROVED: { label: 'Approved', class: 'success' },
+  REJECTED: { label: 'Rejected', class: 'danger' },
+  COMPLETED: { label: 'Completed', class: 'success' }
+};
 
-const selectedApplication = ref(applications[0]);
+const warehouseMap = {
+  'Central Warehouse': 'WH-CENTRAL',
+  'East Warehouse': 'WH-EAST',
+  'West Warehouse': 'WH-WEST',
+  'North Warehouse': 'WH-NORTH',
+  'South Warehouse': 'WH-SOUTH'
+};
+
+const applications = ref([]);
+const selectedApplication = ref(null);
 const decisionRemark = ref('');
-const showAllocationForm = ref(false);
-
-const skuOptions = reactive([
-  { sku: 'PROD-001', name: 'Casual T-Shirt' },
-  { sku: 'PROD-002', name: 'Classic Denim Jeans' },
-  { sku: 'PROD-003', name: 'Hooded Sweatshirt' },
-  { sku: 'PROD-004', name: 'Chino Pants' },
-  { sku: 'PROD-005', name: 'Polo Shirt' },
-  { sku: 'PROD-006', name: 'Jogger Pants' }
-]);
+const allocationFormVisible = ref(false);
+const transfers = ref([]);
+const loading = ref(false);
 
 const transfer = reactive({
   from: '',
@@ -205,184 +187,131 @@ const transfer = reactive({
   reason: ''
 });
 
-const timeline = reactive([
-  {
-    id: 'tl-1',
-    title: 'Application Submitted',
-    desc: 'Regional manager confirmed replenishment requirement',
-    time: '2025-11-28 09:20',
-    status: 'completed'
-  },
-  {
-    id: 'tl-2',
-    title: 'Stock Analysis Completed',
-    desc: 'Central system verified inventory gap',
-    time: '2025-11-28 09:45',
-    status: 'completed'
-  },
-  {
-    id: 'tl-3',
-    title: 'Waiting for Approval',
-    desc: 'Pending central manager decision',
-    time: '2025-11-28 10:05',
-    status: 'processing'
-  }
-]);
+const applicationStatusLabel = (status) => statusMap[status]?.label || status;
+const applicationStatusClass = (status) => statusMap[status]?.class || 'default';
 
-const history = reactive([
-  {
-    id: 'TRF-20251125-011',
-    from: 'Central Warehouse',
-    to: 'East Warehouse',
-    sku: 'PROD-003',
-    quantity: 150,
-    time: '2025-11-25 13:10',
-    eta: '2025-11-28',
-    status: 'In Transit',
-    statusClass: 'info'
-  },
-  {
-    id: 'TRF-20251123-006',
-    from: 'Central Warehouse',
-    to: 'South Warehouse',
-    sku: 'PROD-002',
-    quantity: 80,
-    time: '2025-11-23 10:45',
-    eta: '2025-11-27',
-    status: 'Completed',
-    statusClass: 'success'
+const timeline = computed(() =>
+  (selectedApplication.value?.progress || []).map((step, idx) => ({
+    id: `${selectedApplication.value?.requestId || 'req'}-${idx}`,
+    title: step.title,
+    desc: step.desc,
+    time: new Date(step.timestamp).toLocaleString(),
+    status: step.status
+  }))
+);
+
+const allocationHistory = computed(() =>
+  transfers.value.map((record) => ({
+    id: record.transferId,
+    from: record.fromLocationName,
+    to: record.toLocationName,
+    sku: record.productSku,
+    quantity: record.quantity,
+    time: new Date(record.createdAt).toLocaleString(),
+    eta: record.dispatchInfo?.departure ? new Date(record.dispatchInfo.departure).toLocaleDateString() : '--',
+    status: applicationStatusLabel(record.status),
+    statusClass: applicationStatusClass(record.status)
+  }))
+);
+
+const loadApplications = async () => {
+  loading.value = true;
+  try {
+    applications.value = await fetchReplenishmentApplications();
+    if (!selectedApplication.value && applications.value.length > 0) {
+      selectedApplication.value = applications.value[0];
+    } else if (selectedApplication.value) {
+      selectedApplication.value =
+        applications.value.find((item) => item.requestId === selectedApplication.value.requestId) ||
+        applications.value[0] ||
+        null;
+    }
+    allocationFormVisible.value = selectedApplication.value?.status === 'APPROVED';
+  } finally {
+    loading.value = false;
   }
-]);
+};
+
+const loadTransfers = async () => {
+  transfers.value = await fetchTransfers('WH-CENTRAL');
+};
 
 const selectApplication = (application) => {
   selectedApplication.value = application;
-  showAllocationForm.value = false;
-  // Reset transfer form
+  allocationFormVisible.value = application?.status === 'APPROVED';
   transfer.from = '';
   transfer.to = '';
-  transfer.sku = '';
-  transfer.quantity = 0;
+  transfer.sku = application?.productId || '';
+  transfer.quantity = application?.quantity || 0;
   transfer.eta = '';
-  transfer.reason = '';
+  transfer.reason = application?.reason || '';
 };
 
-const approve = (approved) => {
-  if (!selectedApplication.value) {
-    return;
-  }
-  
-  // Validate decision remark if rejecting
+const approve = async (approved) => {
+  if (!selectedApplication.value) return;
   if (!approved && !decisionRemark.value.trim()) {
-    window.alert('Please provide a rejection reason');
+    window.alert('Please provide a rejection remark');
     return;
   }
-
-  const action = approved ? 'approved' : 'rejected';
-  
-  if (approved) {
-    // Show allocation form after approval
-    showAllocationForm.value = true;
-    // Pre-fill some fields from the application
-    transfer.sku = getSkuFromProduct(selectedApplication.value.product);
-    transfer.quantity = selectedApplication.value.quantity;
-    
-    // Update timeline
-    timeline.push({
-      id: `tl-${timeline.length + 1}`,
-      title: 'Application Approved',
-      desc: decisionRemark.value || 'Application approved by central manager',
-      time: new Date().toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(/\//g, '-'),
-      status: 'completed'
+  const decision = approved ? 'APPROVED' : 'REJECTED';
+  try {
+    const updated = await updateReplenishmentApplicationStatus(selectedApplication.value.requestId, {
+      decision,
+      remark: decisionRemark.value
     });
-  } else {
-    // Update timeline for rejection
-    timeline.push({
-      id: `tl-${timeline.length + 1}`,
-      title: 'Application Rejected',
-      desc: decisionRemark.value || 'Application rejected by central manager',
-      time: new Date().toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(/\//g, '-'),
-      status: 'completed'
-    });
-    showAllocationForm.value = false;
+    await loadApplications();
+    selectApplication(updated);
+    if (approved) {
+      allocationFormVisible.value = true;
+    } else {
+      allocationFormVisible.value = false;
+    }
+    window.alert(`Application ${decision.toLowerCase()}`);
+  } catch (error) {
+    window.alert(error.message || 'Operation failed');
+  } finally {
+    decisionRemark.value = '';
   }
-  
-  // Update application status
-  selectedApplication.value.statusClass = approved ? 'success' : 'danger';
-  selectedApplication.value.statusLabel = approved ? 'Approved' : 'Rejected';
-  
-  decisionRemark.value = '';
 };
 
-const getSkuFromProduct = (productName) => {
-  const productMap = {
-    'Jogger Pants': 'PROD-006',
-    'Hooded Sweatshirt': 'PROD-003',
-    'Classic Denim Jeans': 'PROD-002',
-    'Casual T-Shirt': 'PROD-001',
-    'Chino Pants': 'PROD-004',
-    'Polo Shirt': 'PROD-005'
-  };
-  return productMap[productName] || '';
-};
-
-const allocate = () => {
-  // Validate all required fields
-  if (!transfer.from || !transfer.to || !transfer.sku || !transfer.quantity || !transfer.eta || !transfer.reason.trim()) {
-    window.alert('Please fill in all required fields');
+const allocate = async () => {
+  if (!selectedApplication.value) return;
+  if (!transfer.from || !transfer.to || !transfer.quantity) {
+    window.alert('Please fill in all allocation fields');
     return;
   }
-  
   if (transfer.from === transfer.to) {
     window.alert('Source and destination cannot be the same');
     return;
   }
-  
-  if (transfer.quantity <= 0) {
-    window.alert('Quantity must be greater than 0');
-    return;
+  try {
+    await createTransferOrder({
+      productSku: transfer.sku || selectedApplication.value.productId,
+      productName: selectedApplication.value.productName,
+      quantity: Number(transfer.quantity),
+      fromLocationId: warehouseMap[transfer.from],
+      fromLocationName: transfer.from,
+      toLocationId: warehouseMap[transfer.to],
+      toLocationName: transfer.to,
+      requestId: selectedApplication.value.requestId
+    });
+    allocationFormVisible.value = false;
+    transfer.from = '';
+    transfer.to = '';
+    transfer.sku = '';
+    transfer.quantity = 0;
+    transfer.eta = '';
+    transfer.reason = '';
+    await Promise.all([loadApplications(), loadTransfers()]);
+    window.alert('Transfer order created and dispatched');
+  } catch (error) {
+    window.alert(error.message || 'Failed to create transfer');
   }
-
-  // Create transfer order
-  const transferId = `TRF-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(history.length + 1).padStart(3, '0')}`;
-  const now = new Date();
-  const timeStr = now.toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(/\//g, '-');
-  
-  history.unshift({
-    id: transferId,
-    from: transfer.from,
-    to: transfer.to,
-    sku: transfer.sku,
-    quantity: transfer.quantity,
-    time: timeStr,
-    eta: transfer.eta,
-    status: 'In Transit',
-    statusClass: 'info'
-  });
-
-  // Update timeline
-  timeline.push({
-    id: `tl-${timeline.length + 1}`,
-    title: 'Transfer Order Created',
-    desc: `${transfer.quantity} units of ${transfer.sku} from ${transfer.from} to ${transfer.to}`,
-    time: timeStr,
-    status: 'completed'
-  });
-
-  // Update regional warehouse inventory (simulated)
-  // In a real application, this would call an API to update the inventory
-  console.log(`Updating inventory: ${transfer.quantity} units of ${transfer.sku} from ${transfer.from} to ${transfer.to}`);
-  
-  window.alert(`Transfer order ${transferId} created successfully`);
-  
-  // Reset form
-  transfer.from = '';
-  transfer.to = '';
-  transfer.sku = '';
-  transfer.quantity = 0;
-  transfer.eta = '';
-  transfer.reason = '';
-  showAllocationForm.value = false;
 };
+
+onMounted(async () => {
+  await Promise.all([loadApplications(), loadTransfers()]);
+});
 </script>
 
 <style scoped>
