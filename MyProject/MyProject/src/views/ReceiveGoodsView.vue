@@ -19,6 +19,10 @@
             <span>Expected Arrival: {{ record.etaText }}</span>
           </div>
           <div class="receiving__plan-meta">
+            <span>SKU: {{ record.productSku || 'N/A' }}</span>
+            <span>Quantity: {{ record.quantity || record.items }}</span>
+          </div>
+          <div class="receiving__plan-meta">
             <span>Dock: {{ record.dock }}</span>
             <span>Items: {{ record.items }} SKU</span>
           </div>
@@ -29,30 +33,16 @@
 
     <section class="card">
       <h2 class="section-title">Receiving Checklist</h2>
-      <div v-if="selectedPlan" class="receiving__summary">
+      <div v-if="selectedPlan && selectedPlan.status !== 'ARRIVED'" class="receiving__summary">
         <div><strong>Plan:</strong> {{ selectedPlan.planNo }}</div>
         <div><strong>Supplier:</strong> {{ selectedPlan.supplier }}</div>
+        <div><strong>Product SKU:</strong> {{ selectedPlan.productSku || 'N/A' }}</div>
         <div><strong>Quality Level:</strong> {{ selectedPlan.qualityLevel }}</div>
       </div>
-      <form class="receiving__form" @submit.prevent="completeReceiving">
-        <div class="receiving__form-row">
-          <div class="form-group">
-            <label class="form-label" for="received">Received Quantity</label>
-            <input id="received" v-model.number="receivingRecord.received" class="form-input" type="number" min="0" />
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="qualified">Qualified Quantity</label>
-            <input id="qualified" v-model.number="receivingRecord.qualified" class="form-input" type="number" min="0" />
-          </div>
-        </div>
+      <form v-if="selectedPlan && selectedPlan.status !== 'ARRIVED'" class="receiving__form" @submit.prevent="completeReceiving">
         <div class="form-group">
-          <label class="form-label" for="issues">Exceptions</label>
-          <select id="issues" v-model="receivingRecord.issue" class="filter-pill">
-            <option value="">No issues</option>
-            <option value="damage">Packaging damage</option>
-            <option value="missing">Missing items</option>
-            <option value="quality">Quality issue</option>
-          </select>
+          <label class="form-label" for="received">Received Quantity</label>
+          <input id="received" v-model.number="receivingRecord.received" class="form-input" type="number" min="0" />
         </div>
         <div class="form-group">
           <label class="form-label" for="storage">Storage Location</label>
@@ -107,13 +97,15 @@ const selectedPlan = ref(null);
 
 const receivingRecord = reactive({
   received: 0,
-  qualified: 0,
-  issue: '',
   storage: '',
   remark: ''
 });
 
 const storageOptions = [
+  { label: 'East Warehouse', value: 'WH-EAST' },
+  { label: 'West Warehouse', value: 'WH-WEST' },
+  { label: 'North Warehouse', value: 'WH-NORTH' },
+  { label: 'South Warehouse', value: 'WH-SOUTH' },
   { label: 'East Store 1', value: 'STORE-EAST-01' },
   { label: 'East Store 2', value: 'STORE-EAST-02' },
   { label: 'West Store 1', value: 'STORE-WEST-01' },
@@ -132,7 +124,7 @@ const statusLabelMap = {
 
 const statusClassMap = {
   PENDING: 'warning',
-  IN_TRANSIT: 'info',
+  IN_TRANSIT: 'warning', // 改为黄色
   ARRIVED: 'success'
 };
 
@@ -144,7 +136,8 @@ const formattedPlans = computed(() =>
     ...plan,
     statusLabel: formatStatusLabel(plan.status),
     statusClass: formatStatusClass(plan.status),
-    etaText: new Date(plan.eta).toLocaleString()
+    etaText: new Date(plan.eta).toLocaleString(),
+    productSku: plan.productSku || 'N/A'
   }))
 );
 
@@ -152,7 +145,7 @@ const formattedLogs = computed(() =>
   logs.value.map((log) => ({
     ...log,
     title: `${log.planNo} ${log.status === 'warning' ? 'Exception' : 'Completed'}`,
-    desc: `${log.qualified} qualified / ${log.received} received @ ${log.storageLocationId}${
+    desc: `SKU: ${log.productSku || 'N/A'} · ${log.received} received @ ${log.storageLocationId}${
       log.issue ? ` (${log.issue})` : ''
     }`,
     time: new Date(log.timestamp).toLocaleString()
@@ -161,6 +154,13 @@ const formattedLogs = computed(() =>
 
 const selectPlan = (plan) => {
   selectedPlan.value = plan;
+  if (plan && plan.status !== 'ARRIVED') {
+    receivingRecord.received = plan.quantity || 0;
+    receivingRecord.storage = plan.storageLocationId || '';
+  } else {
+    receivingRecord.received = 0;
+    receivingRecord.storage = '';
+  }
 };
 
 const loadReceivingData = async () => {
@@ -169,7 +169,19 @@ const loadReceivingData = async () => {
     const [scheduleData, logData] = await Promise.all([fetchReceivingSchedules(), fetchReceivingLogs()]);
     inboundPlans.value = scheduleData;
     logs.value = logData;
-    selectedPlan.value = scheduleData[0] || null;
+    if (!selectedPlan.value && scheduleData.length > 0) {
+      selectedPlan.value = scheduleData[0] || null;
+      if (selectedPlan.value) {
+        selectPlan(selectedPlan.value);
+      }
+    } else if (selectedPlan.value) {
+      // 更新已选中的计划
+      const updated = scheduleData.find(p => p.planNo === selectedPlan.value.planNo);
+      if (updated) {
+        selectedPlan.value = updated;
+        selectPlan(updated);
+      }
+    }
   } catch (error) {
     console.error(error);
   } finally {
@@ -182,20 +194,14 @@ const completeReceiving = async () => {
     window.alert('Please select an inbound plan');
     return;
   }
-  if (!receivingRecord.received || !receivingRecord.qualified || !receivingRecord.storage) {
-    window.alert('Please fill in receiving quantities and storage location');
-    return;
-  }
-  if (receivingRecord.qualified > receivingRecord.received) {
-    window.alert('Qualified Quantity cannot exceed Received Quantity');
+  if (!receivingRecord.received || !receivingRecord.storage) {
+    window.alert('Please fill in received quantity and storage location');
     return;
   }
 
   try {
     await completeReceivingApi(selectedPlan.value.planNo, {
       received: receivingRecord.received,
-      qualified: receivingRecord.qualified,
-      issue: receivingRecord.issue,
       storageLocationId: receivingRecord.storage,
       remark: receivingRecord.remark
     });
@@ -204,7 +210,7 @@ const completeReceiving = async () => {
       planNo: selectedPlan.value.planNo,
       supplier: selectedPlan.value.supplier,
       received: receivingRecord.received,
-      qualified: receivingRecord.qualified,
+      qualified: receivingRecord.received,
       storage: receivingRecord.storage,
       timestamp: new Date().toISOString()
     });
@@ -213,8 +219,6 @@ const completeReceiving = async () => {
 
     Object.assign(receivingRecord, {
       received: 0,
-      qualified: 0,
-      issue: '',
       storage: '',
       remark: ''
     });

@@ -2,6 +2,8 @@ import mongoose from 'mongoose';
 import TransferOrder from '../models/TransferOrder.js';
 import ReceivingSchedule from '../models/ReceivingSchedule.js';
 import ReplenishmentRequest from '../models/ReplenishmentRequest.js';
+import ReplenishmentAlert from '../models/ReplenishmentAlert.js';
+import Inventory from '../models/Inventory.js';
 import { adjustInventory } from '../services/inventoryService.js';
 const genTransferId = () => {
   const now = new Date();
@@ -86,16 +88,27 @@ export const createTransferOrder = async (req, res, next) => {
       );
 
       if (requestId) {
+        const now = new Date();
         await ReplenishmentRequest.findOneAndUpdate(
           { requestId },
           {
-            status: 'PROCESSING',
+            status: 'COMPLETED',
             $push: {
               progress: {
-                title: 'Transfer Order Created',
-                desc: `${quantity} units of ${productSku} allocated from ${fromLocationName || fromLocationId}`,
-                status: 'completed',
-                timestamp: new Date()
+                $each: [
+                  {
+                    title: 'Transfer Order Created',
+                    desc: `${quantity} units of ${productSku} allocated from ${fromLocationName || fromLocationId} to ${toLocationName || toLocationId}`,
+                    status: 'completed',
+                    timestamp: now
+                  },
+                  {
+                    title: 'Transfer Order Dispatched',
+                    desc: `Transfer order ${transferId} created and dispatched to ${toLocationName || toLocationId}`,
+                    status: 'completed',
+                    timestamp: now
+                  }
+                ]
               }
             }
           },
@@ -150,6 +163,7 @@ export const dispatchTransferOrder = async (req, res, next) => {
     }
 
     await session.withTransaction(async () => {
+      // 1. 减少来源仓库（区域仓库）的库存
       await adjustInventory({
         locationId: transfer.fromLocationId,
         locationName: transfer.fromLocationName,
@@ -158,6 +172,58 @@ export const dispatchTransferOrder = async (req, res, next) => {
         delta: -transfer.quantity,
         session
       });
+
+      // 2. 增加目标仓库（门店）的库存
+      await adjustInventory({
+        locationId: transfer.toLocationId,
+        locationName: transfer.toLocationName,
+        productSku: transfer.productSku,
+        productName: transfer.productName,
+        delta: transfer.quantity,
+        session
+      });
+
+      // 3. 检查区域仓库库存是否小于最大库存量的30%（1000*0.3=300）
+      // 如果是，创建ReplenishmentAlert
+      const regionalWarehouses = ['WH-EAST', 'WH-WEST', 'WH-NORTH', 'WH-SOUTH'];
+      if (regionalWarehouses.includes(transfer.fromLocationId)) {
+        const inventory = await Inventory.findOne({
+          productId: transfer.productSku,
+          locationId: transfer.fromLocationId
+        }).session(session);
+
+        if (inventory) {
+          const maxStock = inventory.totalStock || 1000; // 默认最大库存为1000
+          const threshold = maxStock * 0.3; // 30%阈值
+
+          if (inventory.available < threshold) {
+            const alertId = `ALERT-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+            const suggestedQty = Math.ceil(maxStock * 0.9 - inventory.available); // 建议补到90%
+
+            await ReplenishmentAlert.findOneAndUpdate(
+              { productId: transfer.productSku, warehouseId: transfer.fromLocationId },
+              {
+                alertId,
+                productId: transfer.productSku,
+                productName: transfer.productName || transfer.productSku,
+                stock: inventory.available,
+                suggested: suggestedQty > 0 ? suggestedQty : Math.ceil(threshold),
+                trigger: `Regional warehouse inventory below 30% of max stock (${inventory.available} < ${threshold})`,
+                warehouseId: transfer.fromLocationId,
+                warehouseName: transfer.fromLocationName || transfer.fromLocationId,
+                level: inventory.available < threshold * 0.5 ? 'danger' : 'warning',
+                levelLabel: inventory.available < threshold * 0.5 ? 'Urgent' : 'Warning',
+                threshold: threshold
+              },
+              { upsert: true, new: true, session }
+            );
+
+            console.log(
+              `[Regional Warehouse Low Stock Alert] Created: productId=${transfer.productSku}, warehouseId=${transfer.fromLocationId}, available=${inventory.available}, threshold=${threshold}`
+            );
+          }
+        }
+      }
 
       transfer.status = 'IN_TRANSIT';
       transfer.dispatchInfo = {

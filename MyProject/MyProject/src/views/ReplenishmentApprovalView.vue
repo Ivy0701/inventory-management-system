@@ -18,7 +18,7 @@
         >
           <div class="col col-wide">
             <div class="approval__row-title">{{ application.requestId }}</div>
-            <div class="approval__row-meta">{{ application.productName }} · Trigger: {{ application.reason }}</div>
+            <div class="approval__row-meta">{{ application.productName }} (SKU: {{ application.productId }}) · Trigger: {{ application.reason }}</div>
           </div>
           <span class="col">{{ application.warehouseName }}</span>
           <span class="col">{{ application.quantity }}</span>
@@ -35,6 +35,7 @@
       <h2 class="section-title">Application Details</h2>
       <div class="approval__detail">
         <div><strong>Product:</strong> {{ selectedApplication.productName }}</div>
+        <div><strong>SKU:</strong> {{ selectedApplication.productId }}</div>
         <div><strong>Warehouse:</strong> {{ selectedApplication.warehouseName }}</div>
         <div><strong>Restock Quantity:</strong> {{ selectedApplication.quantity }}</div>
         <div><strong>Suggested Vendor:</strong> {{ selectedApplication.vendor }}</div>
@@ -53,6 +54,20 @@
           rows="3"
           placeholder="Approval remark"
         />
+      </div>
+    </section>
+
+    <section class="card">
+      <h2 class="section-title">Approval Timeline</h2>
+      <div class="timeline">
+        <div v-for="item in timeline" :key="item.id" class="timeline-item">
+          <span class="timeline-dot" :class="`timeline-dot--${item.status}`" />
+          <div class="timeline-content">
+            <span class="timeline-title">{{ item.title }}</span>
+            <span class="timeline-desc">{{ item.desc }}</span>
+            <span class="timeline-time">{{ item.time }}</span>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -86,22 +101,11 @@
         </div>
         <div class="form-group">
           <label class="form-label" for="sku">Product SKU *</label>
-          <select id="sku" v-model="transfer.sku" class="filter-pill" required>
-            <option value="">Select product</option>
-            <option v-for="item in skuOptions" :key="item.sku" :value="item.sku">
-              {{ item.sku }} - {{ item.name }}
-            </option>
-          </select>
+          <input id="sku" v-model="transfer.sku" class="form-input" placeholder="PROD-001" required />
         </div>
-        <div class="allocation__form-row">
-          <div class="form-group">
-            <label class="form-label" for="qty">Quantity *</label>
-            <input id="qty" v-model.number="transfer.quantity" class="form-input" type="number" min="1" required />
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="eta">ETA *</label>
-            <input id="eta" v-model="transfer.eta" class="form-input" type="date" required />
-          </div>
+        <div class="form-group">
+          <label class="form-label" for="qty">Quantity *</label>
+          <input id="qty" v-model.number="transfer.quantity" class="form-input" type="number" min="1" required />
         </div>
         <div class="form-group">
           <label class="form-label" for="reason">Reason *</label>
@@ -109,20 +113,6 @@
         </div>
         <button class="btn-primary" type="submit">Create Transfer Order</button>
       </form>
-    </section>
-
-    <section class="card">
-      <h2 class="section-title">Approval Timeline</h2>
-      <div class="timeline">
-        <div v-for="item in timeline" :key="item.id" class="timeline-item">
-          <span class="timeline-dot" :class="`timeline-dot--${item.status}`" />
-          <div class="timeline-content">
-            <span class="timeline-title">{{ item.title }}</span>
-            <span class="timeline-desc">{{ item.desc }}</span>
-            <span class="timeline-time">{{ item.time }}</span>
-          </div>
-        </div>
-      </div>
     </section>
 
     <section v-if="allocationHistory.length" class="card">
@@ -183,7 +173,6 @@ const transfer = reactive({
   to: '',
   sku: '',
   quantity: 0,
-  eta: '',
   reason: ''
 });
 
@@ -217,7 +206,8 @@ const allocationHistory = computed(() =>
 const loadApplications = async () => {
   loading.value = true;
   try {
-    applications.value = await fetchReplenishmentApplications();
+    // 只加载 PENDING 状态的申请（已完成的不会显示）
+    applications.value = await fetchReplenishmentApplications('PENDING');
     if (!selectedApplication.value && applications.value.length > 0) {
       selectedApplication.value = applications.value[0];
     } else if (selectedApplication.value) {
@@ -239,11 +229,10 @@ const loadTransfers = async () => {
 const selectApplication = (application) => {
   selectedApplication.value = application;
   allocationFormVisible.value = application?.status === 'APPROVED';
-  transfer.from = '';
-  transfer.to = '';
+  transfer.from = 'Central Warehouse';
+  transfer.to = application?.warehouseName || '';
   transfer.sku = application?.productId || '';
   transfer.quantity = application?.quantity || 0;
-  transfer.eta = '';
   transfer.reason = application?.reason || '';
 };
 
@@ -295,14 +284,13 @@ const allocate = async () => {
       toLocationName: transfer.to,
       requestId: selectedApplication.value.requestId
     });
-    allocationFormVisible.value = false;
-    transfer.from = '';
-    transfer.to = '';
-    transfer.sku = '';
-    transfer.quantity = 0;
-    transfer.eta = '';
-    transfer.reason = '';
-    await Promise.all([loadApplications(), loadTransfers()]);
+    // 重新加载应用以更新 timeline
+    await loadApplications();
+    // 如果补货申请已完成，隐藏分配表单
+    if (selectedApplication.value?.status === 'COMPLETED') {
+      allocationFormVisible.value = false;
+    }
+    await loadTransfers();
     window.alert('Transfer order created and dispatched');
   } catch (error) {
     window.alert(error.message || 'Failed to create transfer');

@@ -13,7 +13,10 @@
           <div class="replenishment__reminder-header">
             <div style="display: flex; align-items: center; gap: 8px;">
               <span style="font-size: 24px;">{{ reminder.icon || '📦' }}</span>
-              <span>{{ reminder.productName }}</span>
+              <div style="display: flex; flex-direction: column;">
+                <span>{{ reminder.productName }}</span>
+                <span style="font-size: 12px; color: #9ca3af;">SKU: {{ reminder.productId }}</span>
+              </div>
             </div>
             <span class="tag" :class="reminder.level">{{ reminder.levelLabel }}</span>
           </div>
@@ -136,10 +139,14 @@ const loadReplenishmentData = async () => {
       fetchReplenishmentAlerts(),
       fetchReplenishmentProgress()
     ]);
+    // 只显示未提交申请的预警（已提交申请的预警会被删除）
     alerts.value = alertData;
     progress.value = progressData;
     if (alerts.value.length > 0) {
       selectReminder(alerts.value[0]);
+    } else {
+      selectedAlertId.value = null;
+      selectedAlert.value = null;
     }
   } catch (error) {
     console.error(error);

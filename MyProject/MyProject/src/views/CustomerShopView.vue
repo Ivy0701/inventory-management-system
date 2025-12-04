@@ -98,7 +98,13 @@
               <label class="product-modal__label">Quantity:</label>
               <div class="product-modal__quantity">
                 <button class="quantity-btn" @click="decreaseQuantity">-</button>
-                <span class="quantity-value">{{ quantity }}</span>
+                <input
+                  v-model.number="quantity"
+                  class="quantity-input"
+                  type="number"
+                  min="1"
+                  @input="validateQuantity"
+                />
                 <button class="quantity-btn" @click="increaseQuantity">+</button>
               </div>
             </div>
@@ -298,6 +304,12 @@ const increaseQuantity = () => {
 const decreaseQuantity = () => {
   if (quantity.value > 1) {
     quantity.value--;
+  }
+};
+
+const validateQuantity = () => {
+  if (quantity.value < 1 || !Number.isInteger(quantity.value) || isNaN(quantity.value)) {
+    quantity.value = 1;
   }
 };
 
@@ -666,11 +678,24 @@ onMounted(() => {
   font-weight: 600;
 }
 
-.quantity-value {
+.quantity-value,
+.quantity-input {
   min-width: 40px;
   text-align: center;
   font-weight: 600;
   font-size: 18px;
+}
+
+.quantity-input {
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  padding: 4px 8px;
+  background: white;
+  outline: none;
+}
+
+.quantity-input:focus {
+  border-color: #2bb5c0;
 }
 
 .product-modal__footer {

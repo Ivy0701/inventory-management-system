@@ -6,6 +6,10 @@ import ReplenishmentRequest from '../models/ReplenishmentRequest.js';
 import { adjustInventory } from '../services/inventoryService.js';
 
 const storageOptions = new Set([
+  'WH-EAST',
+  'WH-WEST',
+  'WH-NORTH',
+  'WH-SOUTH',
   'STORE-EAST-01',
   'STORE-EAST-02',
   'STORE-WEST-01',
@@ -16,9 +20,17 @@ const storageOptions = new Set([
   'STORE-SOUTH-02'
 ]);
 
-export const getReceivingSchedules = async (_req, res, next) => {
+export const getReceivingSchedules = async (req, res, next) => {
   try {
-    const schedules = await ReceivingSchedule.find().sort({ eta: 1 });
+    const user = req.user;
+    let filter = {};
+    
+    // 如果用户有 assignedLocationId，只返回目标位置为该位置的接收计划
+    if (user?.assignedLocationId) {
+      filter.storageLocationId = user.assignedLocationId;
+    }
+    
+    const schedules = await ReceivingSchedule.find(filter).sort({ eta: 1 });
     res.json(schedules);
   } catch (error) {
     next(error);
@@ -38,14 +50,14 @@ export const completeReceiving = async (req, res, next) => {
   const session = await mongoose.startSession();
   try {
     const { planNo } = req.params;
-    const { received, qualified, issue, storageLocationId, remark } = req.body;
+    const { received, storageLocationId, remark } = req.body;
 
-    if (received == null || qualified == null) {
-      return res.status(400).json({ message: 'Received and qualified quantities are required' });
+    if (received == null) {
+      return res.status(400).json({ message: 'Received quantity is required' });
     }
 
-    if (qualified > received) {
-      return res.status(400).json({ message: 'Qualified quantity cannot exceed received quantity' });
+    if (!storageLocationId) {
+      return res.status(400).json({ message: 'Storage location is required' });
     }
 
     if (!storageOptions.has(storageLocationId)) {
@@ -59,12 +71,13 @@ export const completeReceiving = async (req, res, next) => {
 
     let responsePayload;
     await session.withTransaction(async () => {
+      // 使用 received 作为 qualified（因为不再区分）
       await adjustInventory({
         locationId: storageLocationId,
         locationName: storageLocationId,
         productSku: schedule.productSku,
         productName: schedule.productName,
-        delta: qualified,
+        delta: received,
         session
       });
 
@@ -79,11 +92,11 @@ export const completeReceiving = async (req, res, next) => {
             supplier: schedule.supplier,
             productSku: schedule.productSku,
             received,
-            qualified,
+            qualified: received, // 使用 received 作为 qualified
             storageLocationId,
-            issue: issue || '',
+            issue: '',
             remark: remark || '',
-            status: issue ? 'warning' : 'success'
+            status: 'success'
           }
         ],
         { session }
@@ -108,7 +121,7 @@ export const completeReceiving = async (req, res, next) => {
               $push: {
                 progress: {
                   title: 'Receiving Completed',
-                  desc: `${storageLocationId} received ${qualified} units`,
+                  desc: `${storageLocationId} received ${received} units`,
                   status: 'completed',
                   timestamp: new Date()
                 }
