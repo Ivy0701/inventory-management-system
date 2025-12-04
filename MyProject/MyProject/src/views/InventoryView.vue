@@ -214,8 +214,20 @@ const selectItem = (item) => {
   selectedItem.value = item;
 };
 
-const getWarningLevel = (quantity, threshold) => {
+const getWarningLevel = (quantity, threshold, totalStock, productId, locationId) => {
   if (quantity === 0) return { level: 'danger', label: 'Out of Stock' };
+  
+  // 对于区域仓库中的特定产品，如果可用库存小于总库存的30%，显示Low Stock
+  const regionalWarehouses = ['WH-EAST', 'WH-WEST', 'WH-NORTH', 'WH-SOUTH'];
+  const specificProducts = ['PROD-001', 'PROD-002', 'PROD-003', 'PROD-004', 'PROD-005', 'PROD-006'];
+  
+  if (regionalWarehouses.includes(locationId) && specificProducts.includes(productId)) {
+    const threshold30Percent = totalStock * 0.3;
+    if (quantity < threshold30Percent) {
+      return { level: 'warning', label: 'Low Stock' };
+    }
+  }
+  
   if (quantity < threshold) return { level: 'warning', label: 'Low Stock' };
   return { level: 'default', label: 'Normal' };
 };
@@ -248,12 +260,13 @@ const loadInventory = async () => {
     allData.forEach((item) => {
       const metadata = productMetadata[item.productId];
       if (metadata) {
-        const warning = getWarningLevel(item.available, metadata.threshold);
+        const totalStock = item.totalStock || 200;
+        const warning = getWarningLevel(item.available, metadata.threshold, totalStock, item.productId, item.locationId);
         inventory.push({
           sku: item.productId,
           name: metadata.name,
           spec: metadata.spec,
-          total: item.totalStock || 200,
+          total: totalStock,
           available: item.available,
           threshold: metadata.threshold,
           warningLevel: warning.level,

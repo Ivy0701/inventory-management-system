@@ -71,20 +71,57 @@ export const completeReceiving = async (req, res, next) => {
 
     let responsePayload;
     await session.withTransaction(async () => {
-      // 使用 received 作为 qualified（因为不再区分）
-      await adjustInventory({
-        locationId: storageLocationId,
-        locationName: storageLocationId,
-        productSku: schedule.productSku,
-        productName: schedule.productName,
-        delta: received,
-        session
-      });
+      // 查找对应的transfer order
+      const transfer = await TransferOrder.findOne({ transferId: planNo }).session(session);
+      
+      if (transfer) {
+        // 1. 减少from仓库的库存（货物已从源仓库发出）
+        await adjustInventory({
+          locationId: transfer.fromLocationId,
+          locationName: transfer.fromLocationName,
+          productSku: schedule.productSku,
+          productName: schedule.productName,
+          delta: -received,
+          session
+        });
 
+        // 2. 增加to仓库的库存（货物已到达目标仓库）
+        await adjustInventory({
+          locationId: storageLocationId,
+          locationName: storageLocationId,
+          productSku: schedule.productSku,
+          productName: schedule.productName,
+          delta: received,
+          session
+        });
+
+        // 3. 更新transfer order状态
+        transfer.status = 'COMPLETED';
+        transfer.inventoryUpdated = true;
+        transfer.history.push({
+          status: 'COMPLETED',
+          note: 'Receiving confirmed by region',
+          createdAt: new Date()
+        });
+        await transfer.save({ session });
+      } else {
+        // 如果没有对应的transfer order，只增加目标仓库的库存
+        await adjustInventory({
+          locationId: storageLocationId,
+          locationName: storageLocationId,
+          productSku: schedule.productSku,
+          productName: schedule.productName,
+          delta: received,
+          session
+        });
+      }
+
+      // 4. 更新receiving schedule状态
       schedule.status = 'ARRIVED';
       schedule.storageLocationId = storageLocationId;
       await schedule.save({ session });
 
+      // 5. 创建receiving log
       const log = await ReceivingLog.create(
         [
           {
@@ -102,40 +139,29 @@ export const completeReceiving = async (req, res, next) => {
         { session }
       );
 
-      const transfer = await TransferOrder.findOne({ transferId: planNo }).session(session);
-      if (transfer) {
-        transfer.status = 'COMPLETED';
-        transfer.inventoryUpdated = true;
-        transfer.history.push({
-          status: 'COMPLETED',
-          note: 'Receiving confirmed by region',
-          createdAt: new Date()
-        });
-        await transfer.save({ session });
-
-        if (transfer.requestId) {
-          await ReplenishmentRequest.findOneAndUpdate(
-            { requestId: transfer.requestId },
-            {
-              status: 'COMPLETED',
-              $push: {
-                progress: {
-                  title: 'Receiving Completed',
-                  desc: `${storageLocationId} received ${received} units`,
-                  status: 'completed',
-                  timestamp: new Date()
-                }
+      // 6. 更新replenishment request状态（如果存在）
+      if (transfer && transfer.requestId) {
+        await ReplenishmentRequest.findOneAndUpdate(
+          { requestId: transfer.requestId },
+          {
+            status: 'COMPLETED',
+            $push: {
+              progress: {
+                title: 'Receiving Completed',
+                desc: `${storageLocationId} received ${received} units`,
+                status: 'completed',
+                timestamp: new Date()
               }
-            },
-            { session }
-          );
-        }
+            }
+          },
+          { session }
+        );
       }
 
       responsePayload = {
         schedule,
         log: log[0],
-        transfer
+        transfer: transfer || null
       };
     });
 

@@ -72,7 +72,7 @@
     </section>
 
     <!-- Allocate Commodities Form - shown after approval -->
-    <section v-if="allocationFormVisible && selectedApplication" class="card">
+    <section v-if="allocationFormVisible && selectedApplication && selectedApplication.status === 'APPROVED'" class="card">
       <h2 class="section-title">Allocate Commodities</h2>
       <form class="allocation__form" @submit.prevent="allocate">
         <div class="allocation__form-row">
@@ -115,7 +115,8 @@
       </form>
     </section>
 
-    <section v-if="allocationHistory.length" class="card">
+    <!-- Recent Allocations - shown after approval -->
+    <section v-if="allocationFormVisible && allocationHistory.length" class="card">
       <h2 class="section-title">Recent Allocations</h2>
       <div class="allocation__history">
         <div v-for="record in allocationHistory" :key="record.id" class="allocation__history-item">
@@ -223,7 +224,12 @@ const loadApplications = async () => {
 };
 
 const loadTransfers = async () => {
-  transfers.value = await fetchTransfers('WH-CENTRAL');
+  try {
+    transfers.value = await fetchTransfers('WH-CENTRAL');
+  } catch (error) {
+    console.error('Failed to load transfers:', error);
+    transfers.value = [];
+  }
 };
 
 const selectApplication = (application) => {
@@ -248,13 +254,18 @@ const approve = async (approved) => {
       decision,
       remark: decisionRemark.value
     });
-    await loadApplications();
-    selectApplication(updated);
+    // 更新selectedApplication，保持当前选中的申请
+    selectedApplication.value = updated;
     if (approved) {
+      // 批准后显示Allocate Commodities和Recent Allocations模块
       allocationFormVisible.value = true;
+      // 加载transfers以显示Recent Allocations
+      await loadTransfers();
     } else {
       allocationFormVisible.value = false;
     }
+    // 重新加载应用列表（已批准的不会显示在pending列表中）
+    await loadApplications();
     window.alert(`Application ${decision.toLowerCase()}`);
   } catch (error) {
     window.alert(error.message || 'Operation failed');
@@ -286,11 +297,18 @@ const allocate = async () => {
     });
     // 重新加载应用以更新 timeline
     await loadApplications();
+    // 重新加载transfers以更新Recent Allocations
+    await loadTransfers();
     // 如果补货申请已完成，隐藏分配表单
     if (selectedApplication.value?.status === 'COMPLETED') {
       allocationFormVisible.value = false;
     }
-    await loadTransfers();
+    // 重置表单
+    transfer.from = 'Central Warehouse';
+    transfer.to = selectedApplication.value?.warehouseName || '';
+    transfer.sku = selectedApplication.value?.productId || '';
+    transfer.quantity = selectedApplication.value?.quantity || 0;
+    transfer.reason = selectedApplication.value?.reason || '';
     window.alert('Transfer order created and dispatched');
   } catch (error) {
     window.alert(error.message || 'Failed to create transfer');

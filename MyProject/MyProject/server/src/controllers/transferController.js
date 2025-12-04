@@ -36,14 +36,8 @@ export const createTransferOrder = async (req, res, next) => {
 
     let transferDoc;
     await session.withTransaction(async () => {
-      await adjustInventory({
-        locationId: fromLocationId,
-        locationName: fromLocationName,
-        productSku,
-        productName,
-        delta: -quantity,
-        session
-      });
+      // 注意：不在这里减少from的库存，而是在确认收货时才更新库存
+      // 这样可以确保只有在货物实际到达时才更新库存
 
       transferDoc = await TransferOrder.create(
         [
