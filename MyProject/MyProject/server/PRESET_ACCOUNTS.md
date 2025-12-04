@@ -15,12 +15,20 @@
 |----------------------|--------|--------------|-------|-----------------|
 | east_store1_sales_01 | 123456 | 华东销售1    | sales | East Store 1    |
 | east_store1_sales_02 | 123456 | 华东销售2    | sales | East Store 1    |
+| east_store1_sales_03 | 123456 | 华东销售3    | sales | East Store 2    |
+| east_store1_sales_04 | 123456 | 华东销售4    | sales | East Store 2    |
 | west_store1_sales_01 | 123456 | 西部销售1    | sales | West Store 1    |
 | west_store1_sales_02 | 123456 | 西部销售2    | sales | West Store 1    |
+| west_store1_sales_03 | 123456 | 西部销售3    | sales | West Store 2    |
+| west_store1_sales_04 | 123456 | 西部销售4    | sales | West Store 2    |
 | north_store1_sales_01| 123456 | 华北销售1    | sales | North Store 1   |
 | north_store1_sales_02| 123456 | 华北销售2    | sales | North Store 1   |
+| north_store1_sales_03| 123456 | 华北销售3    | sales | North Store 2   |
+| north_store1_sales_04| 123456 | 华北销售4    | sales | North Store 2   |
 | south_store1_sales_01| 123456 | 华南销售1    | sales | South Store 1   |
 | south_store1_sales_02| 123456 | 华南销售2    | sales | South Store 1   |
+| south_store1_sales_03| 123456 | 华南销售3    | sales | South Store 2   |
+| south_store1_sales_04| 123456 | 华南销售4    | sales | South Store 2   |
 
 ### 区域仓库管理员账号
 

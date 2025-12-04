@@ -10,10 +10,12 @@ import receivingRoutes from './routes/receivingRoutes.js';
 import replenishmentRoutes from './routes/replenishmentRoutes.js';
 import { initDefaultUsers } from './scripts/initDefaultUsers.js';
 import { initOperationalData } from './scripts/initOperationalData.js';
+import { initRegionalInventories } from './scripts/initRegionalInventories.js';
 
 connectDb();
 initDefaultUsers();
 initOperationalData();
+initRegionalInventories();
 
 const app = express();
 

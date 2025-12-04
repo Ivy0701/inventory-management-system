@@ -147,24 +147,43 @@ const showPresetAccounts = computed(() => {
   return role.value === 'sales' || role.value === 'regionalManager' || role.value === 'centralManager';
 });
 
+const PRESET_ACCOUNTS = {
+  sales: [
+    { account: 'east_store1_sales_01', password: '123456', name: 'East Store 1 · Sales 01' },
+    { account: 'east_store1_sales_02', password: '123456', name: 'East Store 1 · Sales 02' },
+    { account: 'east_store1_sales_03', password: '123456', name: 'East Store 2 · Sales 03' },
+    { account: 'east_store1_sales_04', password: '123456', name: 'East Store 2 · Sales 04' },
+    { account: 'west_store1_sales_01', password: '123456', name: 'West Store 1 · Sales 01' },
+    { account: 'west_store1_sales_02', password: '123456', name: 'West Store 1 · Sales 02' },
+    { account: 'west_store1_sales_03', password: '123456', name: 'West Store 2 · Sales 03' },
+    { account: 'west_store1_sales_04', password: '123456', name: 'West Store 2 · Sales 04' },
+    { account: 'north_store1_sales_01', password: '123456', name: 'North Store 1 · Sales 01' },
+    { account: 'north_store1_sales_02', password: '123456', name: 'North Store 1 · Sales 02' },
+    { account: 'north_store1_sales_03', password: '123456', name: 'North Store 2 · Sales 03' },
+    { account: 'north_store1_sales_04', password: '123456', name: 'North Store 2 · Sales 04' },
+    { account: 'south_store1_sales_01', password: '123456', name: 'South Store 1 · Sales 01' },
+    { account: 'south_store1_sales_02', password: '123456', name: 'South Store 1 · Sales 02' },
+    { account: 'south_store1_sales_03', password: '123456', name: 'South Store 2 · Sales 03' },
+    { account: 'south_store1_sales_04', password: '123456', name: 'South Store 2 · Sales 04' }
+  ],
+  regionalManager: [
+    { account: 'east_manager_01', password: '123456', name: 'East Warehouse · Manager 01' },
+    { account: 'east_manager_02', password: '123456', name: 'East Warehouse · Manager 02' },
+    { account: 'west_manager_01', password: '123456', name: 'West Warehouse · Manager 01' },
+    { account: 'west_manager_02', password: '123456', name: 'West Warehouse · Manager 02' },
+    { account: 'north_manager_01', password: '123456', name: 'North Warehouse · Manager 01' },
+    { account: 'north_manager_02', password: '123456', name: 'North Warehouse · Manager 02' },
+    { account: 'south_manager_01', password: '123456', name: 'South Warehouse · Manager 01' },
+    { account: 'south_manager_02', password: '123456', name: 'South Warehouse · Manager 02' }
+  ],
+  centralManager: [
+    { account: 'central001', password: '123456', name: 'Central Warehouse · Manager 01' },
+    { account: 'central002', password: '123456', name: 'Central Warehouse · Manager 02' }
+  ]
+};
+
 const presetAccounts = computed(() => {
-  if (role.value === 'sales') {
-    return [
-      { account: 'sales001', password: '123456', name: 'Sales Staff 1' },
-      { account: 'sales002', password: '123456', name: 'Sales Staff 2' }
-    ];
-  } else if (role.value === 'regionalManager') {
-    return [
-      { account: 'regional001', password: '123456', name: 'Regional Manager 1' },
-      { account: 'regional002', password: '123456', name: 'Regional Manager 2' }
-    ];
-  } else if (role.value === 'centralManager') {
-    return [
-      { account: 'central001', password: '123456', name: 'Central Manager 1' },
-      { account: 'central002', password: '123456', name: 'Central Manager 2' }
-    ];
-  }
-  return [];
+  return PRESET_ACCOUNTS[role.value] || [];
 });
 
 const fillAccount = (account) => {
