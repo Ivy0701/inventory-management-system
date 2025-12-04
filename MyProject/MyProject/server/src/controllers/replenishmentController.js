@@ -155,32 +155,16 @@ export const updateReplenishmentApplicationStatus = async (req, res, next) => {
       return res.status(404).json({ message: 'Application not found' });
     }
 
-    // 确保必填字段存在，如果不存在则使用默认值
-    const warehouseId = request.warehouseId || 'UNKNOWN';
-    const warehouseName = request.warehouseName || 'Unknown Warehouse';
+    request.status = decision === 'APPROVED' ? 'APPROVED' : 'REJECTED';
+    request.progress.push({
+      title: decision === 'APPROVED' ? 'Application Approved' : 'Application Rejected',
+      desc: remark || (decision === 'APPROVED' ? 'Approved by central manager' : 'Rejected by central manager'),
+      status: 'completed',
+      timestamp: new Date()
+    });
+    await request.save();
 
-    // 使用 findOneAndUpdate 确保所有必填字段都被正确保存
-    const updated = await ReplenishmentRequest.findOneAndUpdate(
-      { requestId },
-      {
-        $set: {
-          status: decision === 'APPROVED' ? 'APPROVED' : 'REJECTED',
-          warehouseId: warehouseId,
-          warehouseName: warehouseName
-        },
-        $push: {
-          progress: {
-            title: decision === 'APPROVED' ? 'Application Approved' : 'Application Rejected',
-            desc: remark || (decision === 'APPROVED' ? 'Approved by central manager' : 'Rejected by central manager'),
-            status: 'completed',
-            timestamp: new Date()
-          }
-        }
-      },
-      { new: true, runValidators: true }
-    );
-
-    res.json(updated);
+    res.json(request);
   } catch (error) {
     next(error);
   }
