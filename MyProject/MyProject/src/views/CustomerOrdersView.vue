@@ -111,8 +111,7 @@
                 <span style="font-weight: 600;">{{ item.productName || item.name }}</span>
               </div>
               <div class="customer-orders__product-body">
-                <span v-if="item.color">Color: {{ item.color }}</span>
-                <span v-if="item.size">Size: {{ item.size }}</span>
+                <span>Size: {{ item.size || 'One Size' }}</span>
                 <span>Quantity: {{ item.quantity }}</span>
                 <span>Price: ${{ item.price }}</span>
                 <span>Subtotal: ${{ (item.price * item.quantity).toFixed(2) }}</span>

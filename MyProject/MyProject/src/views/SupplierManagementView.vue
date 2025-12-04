@@ -68,31 +68,31 @@ import { reactive, ref } from 'vue';
 
 const suppliers = reactive([
   {
-    name: 'JingCai Technology',
+    name: 'Fashion Apparel Manufacturing',
     category: 'Apparel OEM',
     rating: 'A',
     ratingClass: 'success',
     leadTime: 5,
     fulfillmentRate: 98,
-    contact: 'Ms. He'
+    contact: 'Ms. Li'
   },
   {
-    name: 'HuaTeng Electronics',
-    category: 'Smart Device OEM',
-    rating: 'B',
+    name: 'Premium Garment Supply Chain',
+    category: 'Garment Supply Chain',
+    rating: 'A',
     ratingClass: 'info',
     leadTime: 7,
-    fulfillmentRate: 94,
-    contact: 'Mr. Wang'
+    fulfillmentRate: 96,
+    contact: 'Mr. Zhang'
   },
   {
-    name: 'LianChuang Supply Chain',
-    category: 'Logistics Partner',
-    rating: 'A',
+    name: 'Trend Clothing Supplier',
+    category: 'Fashion Brand Partner',
+    rating: 'B',
     ratingClass: 'success',
-    leadTime: 4,
-    fulfillmentRate: 96,
-    contact: 'Ms. Lin'
+    leadTime: 6,
+    fulfillmentRate: 95,
+    contact: 'Ms. Chen'
   }
 ]);
 
@@ -107,13 +107,13 @@ const supplierForm = reactive({
 const interactions = reactive([
   {
     id: 'si-1',
-    title: 'JingCai Technology Quarterly Review',
+    title: 'Fashion Apparel Manufacturing Quarterly Review',
     desc: 'Evaluated new fabric plan and agreed on SLA 5 days',
     time: '2025-11-20 15:30'
   },
   {
     id: 'si-2',
-    title: 'HuaTeng Electronics Quality Update',
+    title: 'Premium Garment Supply Chain Quality Update',
     desc: 'Addressed packaging issue and implemented double-check policy',
     time: '2025-11-18 10:15'
   }

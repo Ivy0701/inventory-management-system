@@ -165,7 +165,7 @@
             <span>Phone: {{ selectedOrder.shippingAddress.phone }}</span>
           </div>
           <div class="list-item">
-            <span>Address: {{ selectedOrder.shippingAddress.street }}, {{ selectedOrder.shippingAddress.city }}, {{ selectedOrder.shippingAddress.state }} {{ selectedOrder.shippingAddress.zipCode }}</span>
+            <span>Address: {{ selectedOrder.shippingAddress.street }}, {{ selectedOrder.shippingAddress.state }} {{ selectedOrder.shippingAddress.zipCode }}</span>
           </div>
         </div>
       </div>

@@ -205,7 +205,7 @@ export const checkAndCreateReplenishmentAlerts = async (_req, res, next) => {
             // 如果没有未完成的申请，创建或更新alert
             if (!existingRequest) {
               const alertId = `ALERT-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-              const suggestedQty = Math.ceil(inventory.totalStock * 0.9 - inventory.available); // 建议补到90%
+              const suggestedQty = Math.max(0, Math.ceil(inventory.totalStock * 0.9 - inventory.available)); // 建议补到90%
               const shortageQty = Math.ceil(threshold30Percent - inventory.available); // 缺货数量
               
               const alert = await ReplenishmentAlert.findOneAndUpdate(
@@ -278,19 +278,19 @@ export const createAlertsForLowStockItems = async (req, res, next) => {
       // 只要商品是low stock状态，就应该创建或更新alert
       // 无论是否有未完成的申请，都应该显示alert（因为申请可能被拒绝，或者需要再次补货）
       
-      // 计算缺货数量：如果totalStock存在，使用30%阈值；否则使用threshold
+        // 计算缺货数量：如果totalStock存在，使用30%阈值；否则使用threshold
       let shortageQty = 0;
       let suggestedQty = 0;
       let triggerText = '';
       
       if (totalStock && totalStock > 0) {
         const threshold30Percent = totalStock * 0.3;
-        shortageQty = Math.max(0, Math.ceil(threshold30Percent - available));
-        suggestedQty = Math.ceil(totalStock * 0.9 - available);
+          shortageQty = Math.max(0, Math.ceil(threshold30Percent - available));
+          suggestedQty = Math.max(0, Math.ceil(totalStock * 0.9 - available));
         triggerText = `库存低于总库存的30% (当前: ${available} < ${Math.ceil(threshold30Percent)})`;
       } else if (threshold && threshold > 0) {
-        shortageQty = Math.max(0, Math.ceil(threshold - available));
-        suggestedQty = Math.max(0, Math.ceil(threshold * 2 - available)); // 建议补到threshold的2倍
+          shortageQty = Math.max(0, Math.ceil(threshold - available));
+          suggestedQty = Math.max(0, Math.ceil((threshold * 3) - available)); // 近似为 totalStock=threshold/0.3, 0.9*totalStock=3*threshold
         triggerText = `库存低于安全阈值 (当前: ${available} < ${threshold})`;
       } else {
         shortageQty = Math.max(0, Math.ceil(50 - available)); // 默认阈值50

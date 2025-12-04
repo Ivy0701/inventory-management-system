@@ -6,26 +6,30 @@
         <div
           v-for="reminder in alerts"
           :key="reminder.alertId"
-          class="list-item replenishment__reminder"
+          class="list-item replenishment__alert-card"
           :class="{ 'replenishment__reminder--active': selectedAlertId === reminder.alertId }"
           @click="selectReminder(reminder)"
         >
-          <div class="replenishment__reminder-header">
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="font-size: 24px;">{{ reminder.icon || '📦' }}</span>
-              <div style="display: flex; flex-direction: column;">
-                <span>{{ reminder.productName }}</span>
-                <span style="font-size: 12px; color: #9ca3af;">SKU: {{ reminder.productId }}</span>
+          <div class="replenishment__alert-main">
+            <div class="replenishment__alert-left">
+              <div class="replenishment__alert-title">
+                <span class="replenishment__alert-icon">{{ reminder.icon || '📦' }}</span>
+                <div class="replenishment__alert-title-text">
+                  <span class="replenishment__alert-name">{{ reminder.productName }}</span>
+                  <span class="replenishment__alert-sku">SKU: {{ reminder.productId }}</span>
+                </div>
+              </div>
+              <div class="replenishment__alert-info">
+                <span>Current Stock: {{ reminder.stock }}</span>
+                <span>Location: {{ reminder.warehouseName }}</span>
               </div>
             </div>
-            <span class="tag" :class="reminder.level">{{ reminder.levelLabel }}</span>
-          </div>
-          <div class="replenishment__reminder-body">
-            <span>Product SKU: {{ reminder.productId }}</span>
-            <span>Warehouse: {{ reminder.warehouseName }}</span>
-            <span>Current Stock: {{ reminder.stock }}</span>
-            <span v-if="reminder.shortageQty">Shortage Qty: {{ reminder.shortageQty }}</span>
-            <span>Suggested Restock: {{ reminder.suggested }}</span>
+            <div class="replenishment__alert-right">
+              <span class="tag" :class="reminder.level">{{ reminder.levelLabel }}</span>
+              <span class="replenishment__alert-suggest">
+                Suggested Restock: {{ reminder.suggested }}
+              </span>
+            </div>
           </div>
           <div class="replenishment__reminder-meta">
             <span>Trigger Reason: {{ reminder.trigger }}</span>
@@ -38,28 +42,6 @@
       </div>
     </section>
 
-    <section class="card">
-      <h2 class="section-title">Pending Replenishment Board</h2>
-      <div v-if="pendingLoading" class="empty-hint">Loading tasks...</div>
-      <div v-else-if="boardApplications.length" class="list">
-        <div v-for="item in boardApplications" :key="item.requestId" class="list-item replenishment__reminder">
-          <div class="replenishment__reminder-header">
-            <div style="display: flex; flex-direction: column;">
-              <span>{{ item.requestId }}</span>
-              <span style="font-size: 12px; color: #9ca3af;">{{ item.productName }} · {{ item.quantity }} units</span>
-            </div>
-            <span class="tag" :class="item.statusClass">{{ item.statusLabel }}</span>
-          </div>
-          <div class="replenishment__reminder-body">
-            <span>Warehouse: {{ item.warehouseName }}</span>
-            <span>Status Route: {{ item.routeText }}</span>
-            <span>Submitted: {{ item.submittedAt }}</span>
-            <span>Last Update: {{ item.lastUpdate }}</span>
-          </div>
-        </div>
-      </div>
-      <p v-else class="empty-hint">No pending replenishment tasks</p>
-    </section>
 
     <section class="card">
       <h2 class="section-title">Replenishment Application</h2>
@@ -131,36 +113,19 @@
 <script setup>
 import { reactive, ref, computed, onMounted } from 'vue';
 import { useAppStore } from '../store/appStore';
-import {
-  fetchReplenishmentAlerts,
-  fetchReplenishmentProgress,
-  submitReplenishmentApplication,
-  fetchReplenishmentApplications
-} from '../services/replenishmentService';
+import { fetchReplenishmentAlerts, fetchReplenishmentProgress, submitReplenishmentApplication } from '../services/replenishmentService';
 
 const appStore = useAppStore();
 
 const alerts = ref([]);
 const progress = ref([]);
-const pendingApplications = ref([]);
 const loading = ref(false);
-const pendingLoading = ref(false);
 
-const vendors = ['JingCai Technology', 'HuaTeng Electronics', 'LianChuang Supply Chain'];
+// 供应商改为服装行业（英文）
+const vendors = ['Fashion Apparel Manufacturing', 'Premium Garment Supply Chain', 'Trend Clothing Supplier'];
 
 const selectedAlertId = ref(null);
 const selectedAlert = ref(null);
-const assignedWarehouseId = computed(() => appStore.user.assignedLocationId || 'WH-EAST');
-
-const requestStatusMap = {
-  PENDING: { label: 'Pending Approval', class: 'warning' },
-  PROCESSING: { label: 'Processing', class: 'info' },
-  APPROVED: { label: 'Approved', class: 'success' },
-  IN_TRANSIT: { label: 'In Transit', class: 'info' },
-  ARRIVED: { label: 'Arrived', class: 'success' },
-  COMPLETED: { label: 'Completed', class: 'success' },
-  REJECTED: { label: 'Completed', class: 'default' }
-};
 
 const application = reactive({
   productId: '',
@@ -178,8 +143,9 @@ const loadReplenishmentData = async () => {
       fetchReplenishmentAlerts(),
       fetchReplenishmentProgress()
     ]);
-    // 只显示未提交申请的预警（已提交申请的预警会被删除）
-    alerts.value = alertData;
+    // 只显示仓库的缺货预警（WH-EAST / WH-WEST / WH-NORTH / WH-SOUTH）
+    const warehouseIds = ['WH-EAST', 'WH-WEST', 'WH-NORTH', 'WH-SOUTH'];
+    alerts.value = alertData.filter((item) => warehouseIds.includes(item.warehouseId));
     progress.value = progressData;
     if (alerts.value.length > 0) {
       selectReminder(alerts.value[0]);
@@ -189,25 +155,8 @@ const loadReplenishmentData = async () => {
     }
   } catch (error) {
     console.error(error);
-    await loadPendingApplications();
   } finally {
     loading.value = false;
-  }
-};
-
-const loadPendingApplications = async () => {
-  pendingLoading.value = true;
-  try {
-    const apps = await fetchReplenishmentApplications({
-      warehouseId: assignedWarehouseId.value
-    });
-    pendingApplications.value = apps.sort(
-      (a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt)
-    );
-  } catch (error) {
-    console.error(error);
-  } finally {
-    pendingLoading.value = false;
   }
 };
 
@@ -220,19 +169,6 @@ const selectReminder = (reminder) => {
   application.vendor = reminder.suggestedVendor || vendors[0];
   application.remark = reminder.trigger;
 };
-
-const boardApplications = computed(() =>
-  pendingApplications.value.map((item) => ({
-    ...item,
-    statusLabel: requestStatusMap[item.status]?.label || item.status,
-    statusClass: requestStatusMap[item.status]?.class || 'default',
-    submittedAt: new Date(item.createdAt).toLocaleString(),
-    lastUpdate: new Date(item.updatedAt || item.createdAt).toLocaleString(),
-    routeText: ['IN_TRANSIT', 'ARRIVED'].includes(item.status)
-      ? `Central Warehouse → ${item.warehouseName}`
-      : 'Awaiting allocation'
-  }))
-);
 
 const submitApplication = async () => {
   if (!application.productId || !application.vendor || !application.quantity || !application.deliveryDate) {
@@ -256,7 +192,6 @@ const submitApplication = async () => {
 
     alerts.value = updatedAlerts;
     progress.value = updatedProgress;
-    await loadPendingApplications();
 
     Object.assign(application, {
       productId: '',

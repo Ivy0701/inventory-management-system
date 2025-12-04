@@ -124,11 +124,15 @@ export const adjustInventory = async ({
         productId: productSku,
         warehouseId
       };
+      const totalStock = inventory.totalStock || 200;
+      const targetStock = totalStock * 0.9;
+      const suggestedQty = Math.max(0, Math.ceil(targetStock - inventory.available));
+
       const alertUpdate = {
         $set: {
           productName: productName || productSku,
           stock: inventory.available,
-          suggested: quantity > 0 ? quantity : 60,
+          suggested: suggestedQty,
           trigger: 'Store inventory below threshold',
           warehouseName,
           level: 'warning',

@@ -59,24 +59,6 @@
             <p class="product-modal__desc">{{ selectedProduct.description }}</p>
             <div class="product-modal__price">${{ selectedProduct.price }}</div>
             
-            <!-- Color Selection -->
-            <div class="product-modal__option">
-              <label class="product-modal__label">Color:</label>
-              <div class="product-modal__colors">
-                <button
-                  v-for="color in selectedProduct.colors"
-                  :key="color"
-                  class="color-option"
-                  :class="{ 'color-option--selected': selectedColor === color }"
-                  :style="{ backgroundColor: getColorCode(color) }"
-                  @click="selectedColor = color"
-                  :title="color"
-                >
-                  <span v-if="selectedColor === color" class="color-option__check">✓</span>
-                </button>
-              </div>
-            </div>
-
             <!-- Size Selection -->
             <div class="product-modal__option">
               <label class="product-modal__label">Size:</label>
@@ -133,7 +115,7 @@
             <div class="cart-item__info">
               <div class="cart-item__details">
                 <span class="cart-item__name">{{ item.name }}</span>
-                <span class="cart-item__variant">{{ item.color }} / Size {{ item.size }}</span>
+                <span class="cart-item__variant">Size {{ item.size }}</span>
               </div>
               <span class="cart-item__price">${{ item.price }} × {{ item.quantity }}</span>
             </div>
@@ -176,7 +158,6 @@ const loading = ref(false);
 const showCart = ref(false);
 const cart = ref([]);
 const selectedProduct = ref(null);
-const selectedColor = ref('');
 const selectedSize = ref('');
 const quantity = ref(1);
 let cartIdCounter = 0;
@@ -188,8 +169,7 @@ const products = ref([
     name: 'Casual T-Shirt',
     description: 'Comfortable cotton t-shirt, perfect for daily wear',
     price: 29.99,
-    colors: ['Black', 'White', 'Blue', 'Red', 'Gray'],
-    sizes: ['S', 'M', 'L', 'XL'],
+    sizes: ['One Size'],
     icon: '👕',
     category: 'clothes'
   },
@@ -198,8 +178,7 @@ const products = ref([
     name: 'Classic Denim Jeans',
     description: 'High-quality denim jeans, durable and stylish',
     price: 59.99,
-    colors: ['Blue', 'Black', 'Gray'],
-    sizes: ['28', '30', '32', '34', '36'],
+    sizes: ['One Size'],
     icon: '👖',
     category: 'pants'
   },
@@ -208,8 +187,7 @@ const products = ref([
     name: 'Hooded Sweatshirt',
     description: 'Warm and cozy sweatshirt with hood',
     price: 49.99,
-    colors: ['Black', 'Gray', 'Navy', 'Red'],
-    sizes: ['S', 'M', 'L', 'XL', 'XXL'],
+    sizes: ['One Size'],
     icon: '🧥',
     category: 'clothes'
   },
@@ -218,8 +196,7 @@ const products = ref([
     name: 'Chino Pants',
     description: 'Smart casual pants for office or weekend',
     price: 54.99,
-    colors: ['Khaki', 'Navy', 'Black', 'Olive'],
-    sizes: ['30', '32', '34', '36', '38'],
+    sizes: ['One Size'],
     icon: '👔',
     category: 'pants'
   },
@@ -228,8 +205,7 @@ const products = ref([
     name: 'Polo Shirt',
     description: 'Classic polo shirt, versatile and elegant',
     price: 39.99,
-    colors: ['White', 'Black', 'Navy', 'Green', 'Red'],
-    sizes: ['S', 'M', 'L', 'XL'],
+    sizes: ['One Size'],
     icon: '👔',
     category: 'clothes'
   },
@@ -238,8 +214,7 @@ const products = ref([
     name: 'Jogger Pants',
     description: 'Comfortable jogger pants for sport and leisure',
     price: 44.99,
-    colors: ['Black', 'Gray', 'Navy', 'Olive'],
-    sizes: ['S', 'M', 'L', 'XL'],
+    sizes: ['One Size'],
     icon: '👖',
     category: 'pants'
   }
@@ -265,34 +240,17 @@ const cartTotalQuantity = computed(() => {
 });
 
 const canAddToCart = computed(() => {
-  return selectedColor.value && selectedSize.value && quantity.value > 0;
+  return selectedSize.value && quantity.value > 0;
 });
-
-const getColorCode = (colorName) => {
-  const colorMap = {
-    'Black': '#000000',
-    'White': '#FFFFFF',
-    'Blue': '#0066CC',
-    'Red': '#CC0000',
-    'Gray': '#808080',
-    'Navy': '#000080',
-    'Khaki': '#C3B091',
-    'Olive': '#808000',
-    'Green': '#008000'
-  };
-  return colorMap[colorName] || '#CCCCCC';
-};
 
 const showProductModal = (product) => {
   selectedProduct.value = product;
-  selectedColor.value = product.colors[0] || '';
-  selectedSize.value = product.sizes[0] || '';
+  selectedSize.value = product.sizes[0] || 'One Size';
   quantity.value = 1;
 };
 
 const closeProductModal = () => {
   selectedProduct.value = null;
-  selectedColor.value = '';
   selectedSize.value = '';
   quantity.value = 1;
 };
@@ -315,7 +273,7 @@ const validateQuantity = () => {
 
 const addToCartWithVariant = () => {
   if (!canAddToCart.value) {
-    window.alert('Please select color and size');
+    window.alert('Please select size and quantity');
     return;
   }
 
@@ -324,17 +282,14 @@ const addToCartWithVariant = () => {
     id: selectedProduct.value.id,
     name: selectedProduct.value.name,
     price: selectedProduct.value.price,
-    color: selectedColor.value,
     size: selectedSize.value,
     quantity: quantity.value,
     icon: selectedProduct.value.icon
   };
 
-  // Check if same variant already exists
+  // Check if same product already exists (one-size, no color)
   const existingItem = cart.value.find(
-    item => item.id === cartItem.id && 
-            item.color === cartItem.color && 
-            item.size === cartItem.size
+    (item) => item.id === cartItem.id
   );
 
   if (existingItem) {

@@ -180,35 +180,19 @@
               required
             />
           </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label" for="city">City *</label>
-              <select
-                id="city"
-                v-model="addressForm.city"
-                class="form-input"
-                required
-              >
-                <option disabled value="">Select city</option>
-                <option v-for="city in currentCities" :key="city" :value="city">
-                  {{ city }}
-                </option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="state">State/Province *</label>
-              <select
-                id="state"
-                v-model="addressForm.state"
-                class="form-input"
-                required
-              >
-                <option disabled value="">Select state/province</option>
-                <option v-for="state in currentStates" :key="state" :value="state">
-                  {{ state }}
-                </option>
-              </select>
-            </div>
+          <div class="form-group">
+            <label class="form-label" for="state">State/Province *</label>
+            <select
+              id="state"
+              v-model="addressForm.state"
+              class="form-input"
+              required
+            >
+              <option disabled value="">Select state/province</option>
+              <option v-for="state in currentStates" :key="state" :value="state">
+                {{ state }}
+              </option>
+            </select>
           </div>
           <div class="form-group">
             <label class="form-label" for="zipCode">Zip/Postal Code *</label>
@@ -298,7 +282,7 @@ const countries = [
     name: 'China',
     phoneCode: '+86',
     cities: ['Beijing', 'Shanghai', 'Guangzhou', 'Shenzhen'],
-    states: ['Beijing', 'Shanghai', 'Guangdong', 'Zhejiang']
+    states: ['Beijing', 'Shanghai', 'Guangdong', 'Xinjiang']
   },
   {
     code: 'HK',
@@ -315,7 +299,6 @@ const addressForm = reactive({
   phoneCode: '+86',
   phone: '',
   street: '',
-  city: '',
   state: '',
   zipCode: '',
   notes: ''
@@ -325,7 +308,6 @@ const currentCountry = computed(() => {
   return countries.find(c => c.code === addressForm.country) || countries[0];
 });
 
-const currentCities = computed(() => currentCountry.value.cities);
 const currentStates = computed(() => currentCountry.value.states);
 
 const currentPhonePlaceholder = computed(() => {
@@ -336,13 +318,12 @@ const phoneMaxLength = computed(() => {
   return addressForm.phoneCode === '+86' ? 11 : 8;
 });
 
-// When country changes, force phoneCode and reset city/state to match
+// When country changes, force phoneCode and reset state to match
 watch(
   () => addressForm.country,
   (newCode) => {
     const found = countries.find(c => c.code === newCode);
     addressForm.phoneCode = found ? found.phoneCode : '+86';
-    addressForm.city = '';
     addressForm.state = '';
     // also reset phone when switching region
     addressForm.phone = '';

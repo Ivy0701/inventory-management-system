@@ -144,7 +144,8 @@ export const updateInventoryQuantity = async (productId, quantityChange, locatio
     //   - 且当前没有该商品、该仓库的待处理/处理中补货申请，避免重复创建
     const regionalWarehouses = ['WH-EAST', 'WH-WEST', 'WH-NORTH', 'WH-SOUTH'];
     if (regionalWarehouses.includes(locationId) && inventory.available < 300) {
-      const targetStock = 900;
+      const totalStock = inventory.totalStock || 900;
+      const targetStock = totalStock * 0.9;
       const replenishQty = targetStock - inventory.available;
 
       if (replenishQty > 0) {
@@ -165,7 +166,7 @@ export const updateInventoryQuantity = async (productId, quantityChange, locatio
               productId,
               productName: inventory.productName || productId,
               stock: inventory.available,
-              suggested: replenishQty,
+              suggested: Math.max(0, Math.ceil(targetStock - inventory.available)),
               trigger: `Regional warehouse inventory below 300 (current: ${inventory.available})`,
               warehouseId: locationId,
               warehouseName: inventory.locationName || locationId,

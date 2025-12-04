@@ -93,8 +93,14 @@ export const createOrder = async (req, res, next) => {
       return res.status(400).json({ message: 'Order items cannot be empty' });
     }
 
-    if (!shippingAddress || !shippingAddress.name || !shippingAddress.phone || 
-        !shippingAddress.street || !shippingAddress.city || !shippingAddress.state || !shippingAddress.zipCode) {
+    if (
+      !shippingAddress ||
+      !shippingAddress.name ||
+      !shippingAddress.phone ||
+      !shippingAddress.street ||
+      !shippingAddress.state ||
+      !shippingAddress.zipCode
+    ) {
       return res.status(400).json({ message: 'Shipping address information is incomplete' });
     }
 
