@@ -28,7 +28,7 @@ const replenishmentRequestSchema = new mongoose.Schema(
     reason: { type: String, default: '' },
     status: {
       type: String,
-      enum: ['PENDING', 'PROCESSING', 'APPROVED', 'REJECTED', 'COMPLETED'],
+      enum: ['PENDING', 'PROCESSING', 'APPROVED', 'IN_TRANSIT', 'ARRIVED', 'REJECTED', 'COMPLETED'],
       default: 'PENDING'
     },
     progress: { type: [progressSchema], default: [] }

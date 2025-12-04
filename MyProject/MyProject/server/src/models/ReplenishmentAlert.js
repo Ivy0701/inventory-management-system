@@ -17,7 +17,8 @@ const replenishmentAlertSchema = new mongoose.Schema(
     },
     levelLabel: { type: String, default: 'Warning' },
     icon: { type: String, default: '📦' },
-    threshold: { type: Number, default: 0 }
+    threshold: { type: Number, default: 0 },
+    shortageQty: { type: Number, default: 0 } // 缺货数量
   },
   { timestamps: true }
 );

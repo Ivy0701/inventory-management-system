@@ -93,6 +93,7 @@
 import { reactive, ref, computed, onMounted } from 'vue';
 import { useAppStore } from '../store/appStore';
 import { getInventoryByLocation } from '../services/inventoryService.js';
+import { createAlertsForLowStockItems } from '../services/replenishmentService.js';
 
 const appStore = useAppStore();
 
@@ -214,9 +215,26 @@ const selectItem = (item) => {
   selectedItem.value = item;
 };
 
-const getWarningLevel = (quantity, threshold) => {
+const getWarningLevel = (quantity, totalStock, productId) => {
+  // 指定的6个产品：PROD-001到PROD-006
+  const targetProducts = ['PROD-001', 'PROD-002', 'PROD-003', 'PROD-004', 'PROD-005', 'PROD-006'];
+  
   if (quantity === 0) return { level: 'danger', label: 'Out of Stock' };
-  if (quantity < threshold) return { level: 'warning', label: 'Low Stock' };
+  
+  // 对于指定的6个产品，如果available < totalStock * 0.3，显示Low Stock（黄色）
+  if (targetProducts.includes(productId) && totalStock > 0) {
+    const threshold30Percent = totalStock * 0.3;
+    if (quantity < threshold30Percent) {
+      return { level: 'warning', label: 'Low Stock' };
+    }
+  }
+  
+  // 其他情况使用原来的threshold逻辑
+  const metadata = productMetadata[productId];
+  if (metadata && quantity < metadata.threshold) {
+    return { level: 'warning', label: 'Low Stock' };
+  }
+  
   return { level: 'default', label: 'Normal' };
 };
 
@@ -248,12 +266,13 @@ const loadInventory = async () => {
     allData.forEach((item) => {
       const metadata = productMetadata[item.productId];
       if (metadata) {
-        const warning = getWarningLevel(item.available, metadata.threshold);
+        const totalStock = item.totalStock || 200;
+        const warning = getWarningLevel(item.available, totalStock, item.productId);
         inventory.push({
           sku: item.productId,
           name: metadata.name,
           spec: metadata.spec,
-          total: item.totalStock || 200,
+          total: totalStock,
           available: item.available,
           threshold: metadata.threshold,
           warningLevel: warning.level,
@@ -270,6 +289,21 @@ const loadInventory = async () => {
         });
       }
     });
+    
+    // 找出所有low stock的商品并创建replenishment alerts
+    try {
+      const lowStockItems = inventory.filter(item => item.warningLabel === 'Low Stock');
+      if (lowStockItems.length > 0) {
+        console.log('Found low stock items:', lowStockItems.map(item => `${item.name} (${item.sku}) at ${item.store}`));
+        const result = await createAlertsForLowStockItems(lowStockItems);
+        console.log('Alerts created/updated:', result);
+      } else {
+        console.log('No low stock items found');
+      }
+    } catch (error) {
+      console.error('Failed to create alerts for low stock items:', error);
+      // 不阻止页面加载，静默失败
+    }
 
     // 提取所有门店名称用于筛选
     const uniqueStores = [...new Set(inventory.map(item => item.store))];

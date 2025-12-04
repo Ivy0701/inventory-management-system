@@ -42,7 +42,10 @@
         <div><strong>Expected Arrival:</strong> {{ new Date(selectedApplication.deliveryDate).toLocaleDateString() }}</div>
         <div><strong>Reason:</strong> {{ selectedApplication.reason || 'N/A' }}</div>
       </div>
-      <div class="approval__decision">
+      <div
+        v-if="['PENDING', 'PROCESSING'].includes(selectedApplication.status)"
+        class="approval__decision"
+      >
         <label class="form-label">Decision</label>
         <div class="approval__decision-actions">
           <button class="btn-primary" type="button" @click="approve(true)">Approve</button>
@@ -54,6 +57,40 @@
           rows="3"
           placeholder="Approval remark"
         />
+      </div>
+    </section>
+
+    <section class="card">
+      <h2 class="section-title">Recent Replenishment History</h2>
+      <div class="approval__table">
+        <div class="approval__table-header">
+          <span class="col col-wide">Application</span>
+          <span class="col">Warehouse</span>
+          <span class="col">Quantity</span>
+          <span class="col">Status</span>
+        </div>
+        <div
+          v-for="application in pastApplications"
+          :key="application.requestId"
+          class="approval__table-row"
+          @click="selectApplication(application)"
+        >
+          <div class="col col-wide">
+            <div class="approval__row-title">{{ application.requestId }}</div>
+            <div class="approval__row-meta">
+              {{ application.productName }} (SKU: {{ application.productId }}) · Updated:
+              {{ new Date(application.updatedAt || application.createdAt).toLocaleString() }}
+            </div>
+          </div>
+          <span class="col">{{ application.warehouseName }}</span>
+          <span class="col">{{ application.quantity }}</span>
+          <span class="col">
+            <span class="tag" :class="applicationStatusClass(application.status)">
+              {{ applicationStatusLabel(application.status) }}
+            </span>
+          </span>
+        </div>
+        <p v-if="!pastApplications.length" class="empty-hint">No historical records</p>
       </div>
     </section>
 
@@ -115,9 +152,9 @@
       </form>
     </section>
 
-    <section v-if="allocationHistory.length" class="card">
+    <section class="card">
       <h2 class="section-title">Recent Allocations</h2>
-      <div class="allocation__history">
+      <div v-if="allocationHistory.length" class="allocation__history">
         <div v-for="record in allocationHistory" :key="record.id" class="allocation__history-item">
           <div class="allocation__history-header">
             <span>{{ record.id }}</span>
@@ -133,6 +170,7 @@
           </div>
         </div>
       </div>
+      <p v-else class="empty-hint">No allocations yet</p>
     </section>
   </div>
 </template>
@@ -149,7 +187,9 @@ const statusMap = {
   PENDING: { label: 'Waiting', class: 'warning' },
   PROCESSING: { label: 'Processing', class: 'info' },
   APPROVED: { label: 'Approved', class: 'success' },
-  REJECTED: { label: 'Rejected', class: 'danger' },
+  IN_TRANSIT: { label: 'In Transit', class: 'info' },
+  ARRIVED: { label: 'Arrived', class: 'success' },
+  REJECTED: { label: 'Completed', class: 'default' },
   COMPLETED: { label: 'Completed', class: 'success' }
 };
 
@@ -162,6 +202,7 @@ const warehouseMap = {
 };
 
 const applications = ref([]);
+const pastApplications = ref([]);
 const selectedApplication = ref(null);
 const decisionRemark = ref('');
 const allocationFormVisible = ref(false);
@@ -206,16 +247,19 @@ const allocationHistory = computed(() =>
 const loadApplications = async () => {
   loading.value = true;
   try {
-    // 只加载 PENDING 状态的申请（已完成的不会显示）
-    applications.value = await fetchReplenishmentApplications('PENDING');
-    if (!selectedApplication.value && applications.value.length > 0) {
-      selectedApplication.value = applications.value[0];
-    } else if (selectedApplication.value) {
-      selectedApplication.value =
-        applications.value.find((item) => item.requestId === selectedApplication.value.requestId) ||
-        applications.value[0] ||
-        null;
+    const allApplications = await fetchReplenishmentApplications();
+    const activeStatuses = ['PENDING', 'PROCESSING', 'APPROVED', 'IN_TRANSIT', 'COMPLETED'];
+    applications.value = allApplications.filter((item) => activeStatuses.includes(item.status)).slice(0, 12);
+    pastApplications.value = allApplications.filter((item) => !activeStatuses.includes(item.status)).slice(0, 20);
+
+    if (!selectedApplication.value) {
+      selectedApplication.value = applications.value[0] || pastApplications.value[0] || null;
+    } else {
+      const refreshed =
+        allApplications.find((item) => item.requestId === selectedApplication.value.requestId) || null;
+      selectedApplication.value = refreshed || applications.value[0] || pastApplications.value[0] || null;
     }
+
     allocationFormVisible.value = selectedApplication.value?.status === 'APPROVED';
   } finally {
     loading.value = false;

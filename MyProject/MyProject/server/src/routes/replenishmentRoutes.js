@@ -5,7 +5,9 @@ import {
   getReplenishmentProgress,
   submitReplenishmentApplication,
   getReplenishmentApplications,
-  updateReplenishmentApplicationStatus
+  updateReplenishmentApplicationStatus,
+  checkAndCreateReplenishmentAlerts,
+  createAlertsForLowStockItems
 } from '../controllers/replenishmentController.js';
 
 const router = Router();
@@ -18,6 +20,8 @@ router.get('/progress', getReplenishmentProgress);
 router.post('/applications', submitReplenishmentApplication);
 router.get('/applications', getReplenishmentApplications);
 router.patch('/applications/:requestId', updateReplenishmentApplicationStatus);
+router.post('/check-alerts', checkAndCreateReplenishmentAlerts);
+router.post('/create-alerts-for-low-stock', createAlertsForLowStockItems);
 
 export default router;
 

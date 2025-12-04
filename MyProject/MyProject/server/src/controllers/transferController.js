@@ -92,7 +92,7 @@ export const createTransferOrder = async (req, res, next) => {
         await ReplenishmentRequest.findOneAndUpdate(
           { requestId },
           {
-            status: 'COMPLETED',
+            status: 'IN_TRANSIT',
             $push: {
               progress: {
                 $each: [
@@ -104,15 +104,21 @@ export const createTransferOrder = async (req, res, next) => {
                   },
                   {
                     title: 'Transfer Order Dispatched',
-                    desc: `Transfer order ${transferId} created and dispatched to ${toLocationName || toLocationId}`,
+                    desc: `Transfer order ${transferId} dispatched to ${toLocationName || toLocationId}`,
                     status: 'completed',
+                    timestamp: now
+                  },
+                  {
+                    title: 'Replenishment In Transit',
+                    desc: `SKU ${productSku} is en route to ${toLocationName || toLocationId}`,
+                    status: 'processing',
                     timestamp: now
                   }
                 ]
               }
             }
           },
-          { session }
+          { session, new: true }
         );
       }
     });

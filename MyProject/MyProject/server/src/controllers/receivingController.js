@@ -117,10 +117,10 @@ export const completeReceiving = async (req, res, next) => {
           await ReplenishmentRequest.findOneAndUpdate(
             { requestId: transfer.requestId },
             {
-              status: 'COMPLETED',
+              status: 'ARRIVED',
               $push: {
                 progress: {
-                  title: 'Receiving Completed',
+                  title: 'Goods Arrived',
                   desc: `${storageLocationId} received ${received} units`,
                   status: 'completed',
                   timestamp: new Date()

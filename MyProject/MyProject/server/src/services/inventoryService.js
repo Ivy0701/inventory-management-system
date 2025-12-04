@@ -144,6 +144,63 @@ export const adjustInventory = async ({
     }
   }
 
+  // 检查区域仓库库存是否低于30%，如果是，创建replenishment alert
+  const regionalWarehouses = ['WH-EAST', 'WH-WEST', 'WH-NORTH', 'WH-SOUTH'];
+  const targetProducts = ['PROD-001', 'PROD-002', 'PROD-003', 'PROD-004', 'PROD-005', 'PROD-006'];
+  
+  if (regionalWarehouses.includes(locationId) && targetProducts.includes(productSku)) {
+    if (inventory.totalStock > 0) {
+      const threshold30Percent = inventory.totalStock * 0.3;
+      
+      if (inventory.available < threshold30Percent) {
+        // 检查是否已有未完成的补货申请
+        const baseFilter = {
+          productId: productSku,
+          warehouseId: locationId,
+          status: { $in: ['PENDING', 'PROCESSING', 'APPROVED'] }
+        };
+        const reqQuery = ReplenishmentRequest.findOne(baseFilter);
+        if (session) reqQuery.session(session);
+        const existingReq = await reqQuery;
+        
+        if (!existingReq) {
+          const alertId = `ALERT-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+          const suggestedQty = Math.ceil(inventory.totalStock * 0.9 - inventory.available);
+          const shortageQty = Math.ceil(threshold30Percent - inventory.available);
+          
+          const alertFilter = {
+            productId: productSku,
+            warehouseId: locationId
+          };
+          const alertUpdate = {
+            $set: {
+              alertId,
+              productId: productSku,
+              productName: productName || productSku,
+              stock: inventory.available,
+              suggested: suggestedQty > 0 ? suggestedQty : Math.ceil(threshold30Percent),
+              trigger: `区域仓库库存低于总库存的30% (当前: ${inventory.available} < ${Math.ceil(threshold30Percent)})`,
+              warehouseId: locationId,
+              warehouseName: locationName || locationId,
+              level: inventory.available < threshold30Percent * 0.5 ? 'danger' : 'warning',
+              levelLabel: inventory.available < threshold30Percent * 0.5 ? 'Urgent' : 'Warning',
+              threshold: Math.ceil(threshold30Percent),
+              shortageQty: shortageQty > 0 ? shortageQty : 0
+            }
+          };
+          const alertOptions = { upsert: true, new: true };
+          if (session) alertOptions.session = session;
+          await ReplenishmentAlert.findOneAndUpdate(alertFilter, alertUpdate, alertOptions);
+        }
+      } else {
+        // 如果库存已恢复，删除对应的alert
+        const deleteQuery = ReplenishmentAlert.findOneAndDelete({ productId: productSku, warehouseId: locationId });
+        if (session) deleteQuery.session(session);
+        await deleteQuery;
+      }
+    }
+  }
+
   return inventory;
 };
 

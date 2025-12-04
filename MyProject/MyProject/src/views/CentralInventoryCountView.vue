@@ -31,23 +31,19 @@
     </section>
 
     <section class="card">
-      <h2 class="section-title">East Warehouse Inventory</h2>
-      <InventoryTable :items="eastInventory" />
+      <div class="section-header">
+        <h2 class="section-title">Regional Warehouse Inventory</h2>
+        <button class="btn-secondary" type="button" @click="refreshAll" :disabled="loading">Refresh</button>
+      </div>
+      <InventoryTable :items="regionalWarehouseInventory" />
     </section>
 
     <section class="card">
-      <h2 class="section-title">West Warehouse Inventory</h2>
-      <InventoryTable :items="westInventory" />
-    </section>
-
-    <section class="card">
-      <h2 class="section-title">North Warehouse Inventory</h2>
-      <InventoryTable :items="northInventory" />
-    </section>
-
-    <section class="card">
-      <h2 class="section-title">South Warehouse Inventory</h2>
-      <InventoryTable :items="southInventory" />
+      <div class="section-header">
+        <h2 class="section-title">Regional Store</h2>
+        <button class="btn-secondary" type="button" @click="refreshAll" :disabled="loading">Refresh</button>
+      </div>
+      <InventoryTable :items="regionalStoreInventory" />
     </section>
   </div>
 </template>
@@ -57,16 +53,28 @@ import { ref, computed, onMounted, defineComponent } from 'vue';
 import { getInventoryByLocation } from '../services/inventoryService';
 
 const centralLocation = { id: 'WH-CENTRAL', label: 'Central Warehouse' };
-const eastWarehouse = { id: 'WH-EAST', label: 'East Warehouse' };
-const westWarehouse = { id: 'WH-WEST', label: 'West Warehouse' };
-const northWarehouse = { id: 'WH-NORTH', label: 'North Warehouse' };
-const southWarehouse = { id: 'WH-SOUTH', label: 'South Warehouse' };
+
+const regionalWarehouseLocations = [
+  { id: 'WH-EAST', label: 'East Warehouse' },
+  { id: 'WH-WEST', label: 'West Warehouse' },
+  { id: 'WH-NORTH', label: 'North Warehouse' },
+  { id: 'WH-SOUTH', label: 'South Warehouse' }
+];
+
+const regionalStoreLocations = [
+  { id: 'STORE-EAST-01', label: 'East Store 1' },
+  { id: 'STORE-EAST-02', label: 'East Store 2' },
+  { id: 'STORE-WEST-01', label: 'West Store 1' },
+  { id: 'STORE-WEST-02', label: 'West Store 2' },
+  { id: 'STORE-SOUTH-01', label: 'South Store 1' },
+  { id: 'STORE-SOUTH-02', label: 'South Store 2' },
+  { id: 'STORE-NORTH-01', label: 'North Store 1' },
+  { id: 'STORE-NORTH-02', label: 'North Store 2' }
+];
 
 const centralInventory = ref([]);
-const eastInventory = ref([]);
-const westInventory = ref([]);
-const northInventory = ref([]);
-const southInventory = ref([]);
+const regionalWarehouseInventory = ref([]);
+const regionalStoreInventory = ref([]);
 const loading = ref(false);
 
 const warningLevel = (available, threshold = 0) => {
@@ -113,19 +121,15 @@ const fetchInventoryForLocations = async (locations) => {
 const refreshAll = async () => {
   loading.value = true;
   try {
-    const [central, east, west, north, south] = await Promise.all([
+    const [central, regionalWarehouses, regionalStores] = await Promise.all([
       fetchInventoryForLocations([centralLocation]),
-      fetchInventoryForLocations([eastWarehouse]),
-      fetchInventoryForLocations([westWarehouse]),
-      fetchInventoryForLocations([northWarehouse]),
-      fetchInventoryForLocations([southWarehouse])
+      fetchInventoryForLocations(regionalWarehouseLocations),
+      fetchInventoryForLocations(regionalStoreLocations)
     ]);
 
     centralInventory.value = central;
-    eastInventory.value = east;
-    westInventory.value = west;
-    northInventory.value = north;
-    southInventory.value = south;
+    regionalWarehouseInventory.value = regionalWarehouses;
+    regionalStoreInventory.value = regionalStores;
   } finally {
     loading.value = false;
   }
@@ -136,16 +140,10 @@ const summary = computed(() => {
     total: items.reduce((sum, item) => sum + (item.total || 0), 0),
     available: items.reduce((sum, item) => sum + (item.available || 0), 0)
   });
-  const allRegional = [
-    ...eastInventory.value,
-    ...westInventory.value,
-    ...northInventory.value,
-    ...southInventory.value
-  ];
   return {
     central: aggregate(centralInventory.value),
-    regional: aggregate(allRegional),
-    store: { total: 0, available: 0 } // 不再显示门店库存
+    regional: aggregate(regionalWarehouseInventory.value),
+    store: aggregate(regionalStoreInventory.value)
   };
 });
 
