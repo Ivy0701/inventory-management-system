@@ -77,9 +77,81 @@ export const getOrders = async (req, res, next) => {
   }
 };
 
+const resolveInventoryLocationFromAddressAndPayment = (shippingAddress, paymentMethod) => {
+  // 默认线上门店（无明显区域信息时）
+  let storeId = DEFAULT_STORE_LOCATION_ID;
+  let warehouseId = null;
+
+  if (!shippingAddress) {
+    return { storeId, warehouseId };
+  }
+
+  const country = shippingAddress.country;
+  const state = (shippingAddress.state || '').toLowerCase();
+
+  // 根据国家/省份映射到区域
+  let regionKey = null;
+  if (country === 'HK') {
+    // 香港归为华东
+    regionKey = 'EAST';
+  } else if (country === 'CN') {
+    if (state === 'shanghai') {
+      regionKey = 'EAST';
+    } else if (state === 'beijing') {
+      regionKey = 'NORTH';
+    } else if (state === 'guangzhou' || state === 'guangdong') {
+      regionKey = 'SOUTH';
+    } else if (state === 'xinjiang') {
+      regionKey = 'WEST';
+    }
+  }
+
+  // 区域到仓库 / 门店 ID 的映射
+  const REGION_TO_LOCATIONS = {
+    EAST: {
+      warehouse: 'WH-EAST',
+      store1: 'STORE-EAST-01',
+      store2: 'STORE-EAST-02'
+    },
+    WEST: {
+      warehouse: 'WH-WEST',
+      store1: 'STORE-WEST-01',
+      store2: 'STORE-WEST-02'
+    },
+    NORTH: {
+      warehouse: 'WH-NORTH',
+      store1: 'STORE-NORTH-01',
+      store2: 'STORE-NORTH-02'
+    },
+    SOUTH: {
+      warehouse: 'WH-SOUTH',
+      store1: 'STORE-SOUTH-01',
+      store2: 'STORE-SOUTH-02'
+    }
+  };
+
+  if (!regionKey || !REGION_TO_LOCATIONS[regionKey]) {
+    // 回退到默认门店
+    return { storeId, warehouseId };
+  }
+
+  const regionConfig = REGION_TO_LOCATIONS[regionKey];
+
+  // 支付方式决定是门店1还是门店2：
+  // - 信用卡 / 借记卡 → 门店2
+  // - 支付宝 / 微信 → 门店1
+  const method = (paymentMethod || '').toLowerCase();
+  const isCard = method === 'credit' || method === 'debit';
+
+  storeId = isCard ? regionConfig.store2 : regionConfig.store1;
+  warehouseId = regionConfig.warehouse;
+
+  return { storeId, warehouseId };
+};
+
 export const createOrder = async (req, res, next) => {
   try {
-    const { items, shippingAddress, subtotal, discount = 0, totalAmount, remark = '' } = req.body;
+    const { items, shippingAddress, subtotal, discount = 0, totalAmount, remark = '', paymentMethod } = req.body;
     const customerId = req.user?.id || req.user?._id;
     
     // If no authenticated user, we can't create an order (or use guest, but they won't be able to view it)
@@ -108,14 +180,12 @@ export const createOrder = async (req, res, next) => {
       return res.status(400).json({ message: 'Invalid order amount' });
     }
 
-    // 根据收货地址国家/区号确定订单对应的库存位置
-    // 需求：香港（HK/+852）订单 → 华东门店1（STORE-EAST-01）；其他默认为线上门店 STORE-DEFAULT
-    const shippingCountry = shippingAddress?.country;
-    const shippingPhoneCode = shippingAddress?.phoneCode;
-    let inventoryLocationId = DEFAULT_STORE_LOCATION_ID;
-    if (shippingCountry === 'HK' || shippingPhoneCode === '+852') {
-      inventoryLocationId = 'STORE-EAST-01';
-    }
+    // 根据收货地址 + 支付方式确定订单对应的库存位置
+    // - 香港 / Shanghai / Beijing / Guangzhou / Xinjiang 分配到对应大区
+    // - 信用卡 / 借记卡 → 门店2 + 对应区域仓库
+    // - 支付宝 / 微信 → 门店1 + 对应区域仓库
+    const { storeId, warehouseId } = resolveInventoryLocationFromAddressAndPayment(shippingAddress, paymentMethod);
+    const inventoryLocationId = storeId || DEFAULT_STORE_LOCATION_ID;
 
     const order = await Order.create({
       orderNumber: generateOrderNumber(),
@@ -128,6 +198,8 @@ export const createOrder = async (req, res, next) => {
       totalAmount,
       remark,
       inventoryLocationId,
+      // 为后续调拨 / 报表留出信息：该订单归属的区域仓库
+      warehouseLocationId: warehouseId || undefined,
       inventoryStatus: 'Inventory Checking',
       status: 'pending',
       timeline: buildTimeline('Order Created')
