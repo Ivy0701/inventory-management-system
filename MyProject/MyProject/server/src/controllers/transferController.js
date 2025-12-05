@@ -136,11 +136,30 @@ const formatDate = (value) => (value ? new Date(value) : null);
 export const getTransferOrders = async (req, res, next) => {
   try {
     const { locationId, status } = req.query;
+    const user = req.user;
     const filter = {};
 
-    if (locationId) {
+    // 如果是区域仓库管理员，根据用户的 assignedLocationId 过滤
+    if (user && user.role === 'regionalManager') {
+      const userLocationId = locationId || user.assignedLocationId;
+      if (userLocationId) {
+        // 区域仓库管理员可以看到从自己仓库发出的调拨单（fromLocationId）或发到自己仓库的调拨单（toLocationId）
+        filter.$or = [{ fromLocationId: userLocationId }, { toLocationId: userLocationId }];
+      } else if (user.accessibleLocationIds && user.accessibleLocationIds.length > 0) {
+        // 如果没有 assignedLocationId，使用 accessibleLocationIds
+        const warehouseIds = user.accessibleLocationIds.filter(id => id.startsWith('WH-'));
+        if (warehouseIds.length > 0) {
+          filter.$or = warehouseIds.flatMap(id => [
+            { fromLocationId: id },
+            { toLocationId: id }
+          ]);
+        }
+      }
+    } else if (locationId) {
+      // 其他角色或明确指定 locationId 时使用 locationId
       filter.$or = [{ fromLocationId: locationId }, { toLocationId: locationId }];
     }
+    // 中央管理员可以看到所有调拨单，不需要过滤
 
     if (status) {
       filter.status = status;

@@ -124,17 +124,149 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, onMounted, watch } from 'vue';
 import { RouterLink, useRoute } from 'vue-router';
 import { useAppStore } from '../store/appStore';
+import { fetchReplenishmentAlerts } from '../services/replenishmentService';
+import { fetchTransfers } from '../services/transferService';
 
 const appStore = useAppStore();
 const route = useRoute();
 
-const alerts = computed(() => appStore.alerts);
 const userRole = computed(() => appStore.user.role);
-const tasksForRole = computed(() => appStore.tasks.filter((task) => task.role === userRole.value));
+
+// 区域仓库管理员的库存警报（从后端获取）
+const inventoryAlerts = ref([]);
+// 区域仓库管理员的待处理补货任务（从后端获取）
+const pendingReplenishmentTasks = ref([]);
+
+// 根据角色决定使用哪个数据源
+const alerts = computed(() => {
+  if (userRole.value === 'regionalManager') {
+    return inventoryAlerts.value;
+  }
+  // 其他角色使用 store 中的静态数据
+  return appStore.alerts;
+});
+
+const tasksForRole = computed(() => {
+  if (userRole.value === 'regionalManager') {
+    return pendingReplenishmentTasks.value;
+  }
+  // 其他角色使用 store 中的静态数据
+  return appStore.tasks.filter((task) => task.role === userRole.value);
+});
+
 const taskCount = computed(() => tasksForRole.value.length);
+
+// 加载区域仓库管理员的实际数据
+const loadRegionalManagerData = async () => {
+  try {
+    // 1. 获取库存警报（ReplenishmentAlert）- 用于 Inventory Alerts
+    const alertsData = await fetchReplenishmentAlerts();
+    inventoryAlerts.value = alertsData.map(alert => {
+      // 根据库存水平确定状态
+      let status = 'Low Stock';
+      if (alert.level === 'danger' || alert.stock === 0) {
+        status = 'Critically Low';
+      } else if (alert.stock < (alert.threshold || 0) * 0.5) {
+        status = 'Critically Low';
+      }
+      
+      return {
+        id: alert.alertId || alert._id,
+        name: alert.productName || alert.productId,
+        stock: alert.stock || 0,
+        unit: 'units',
+        threshold: alert.threshold || 0,
+        status,
+        level: alert.level || 'warning'
+      };
+    });
+
+    // 2. 获取待发运订单（TransferOrder 中状态为 PENDING 的）- 用于 Pending Replenishment Tasks
+    const locationId = appStore.user.assignedLocationId || appStore.user.accessibleLocationIds?.[0] || 'WH-EAST';
+    const transfers = await fetchTransfers(locationId);
+    
+    // 筛选出 PENDING 状态的调拨单（待发运订单）
+    const pendingTransfers = transfers.filter(transfer => transfer.status === 'PENDING');
+    
+    pendingReplenishmentTasks.value = pendingTransfers.map(transfer => {
+      // 根据补货数量判断优先级：数量越多，紧急程度越高
+      const quantity = transfer.quantity || 0;
+      let priority = 'info';
+      let priorityLabel = 'Medium';
+      
+      if (quantity >= 150) {
+        // 150件以上：High
+        priority = 'warning';
+        priorityLabel = 'High';
+      } else if (quantity >= 100) {
+        // 100-149件：Medium-High
+        priority = 'info';
+        priorityLabel = 'Medium';
+      } else if (quantity >= 50) {
+        // 50-99件：Medium
+        priority = 'info';
+        priorityLabel = 'Medium';
+      } else {
+        // 50件以下：Low
+        priority = 'default';
+        priorityLabel = 'Low';
+      }
+      
+      // 格式化截止日期（使用创建时间 + 预计处理时间）
+      const createdAt = new Date(transfer.createdAt);
+      const estimatedDeadline = new Date(createdAt.getTime() + 2 * 24 * 3600 * 1000); // 2天后
+      const nowDate = new Date();
+      const today = new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate());
+      const deadlineDay = new Date(estimatedDeadline.getFullYear(), estimatedDeadline.getMonth(), estimatedDeadline.getDate());
+      
+      const diffDays = Math.floor((deadlineDay - today) / (1000 * 60 * 60 * 24));
+      
+      let deadlineText = 'N/A';
+      if (diffDays === 0) {
+        deadlineText = `Today ${estimatedDeadline.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`;
+      } else if (diffDays === 1) {
+        deadlineText = `Tomorrow ${estimatedDeadline.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`;
+      } else if (diffDays > 1) {
+        deadlineText = estimatedDeadline.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      }
+      
+      return {
+        id: transfer.transferId || transfer._id,
+        title: `${transfer.transferId || 'TRF'} - ${transfer.productName || transfer.productSku}`,
+        desc: `Transfer ${transfer.quantity} units to ${transfer.toLocationName || transfer.toLocationId}`,
+        deadline: deadlineText,
+        priority,
+        priorityLabel
+      };
+    });
+    
+  } catch (error) {
+    console.error('Failed to load regional manager data:', error);
+    // 如果加载失败，使用空数组
+    inventoryAlerts.value = [];
+    pendingReplenishmentTasks.value = [];
+  }
+};
+
+onMounted(() => {
+  if (userRole.value === 'regionalManager') {
+    loadRegionalManagerData();
+  }
+});
+
+// 监听用户角色变化，重新加载数据
+watch(userRole, (newRole) => {
+  if (newRole === 'regionalManager') {
+    loadRegionalManagerData();
+  } else {
+    // 如果不是区域仓库管理员，清空数据
+    inventoryAlerts.value = [];
+    pendingReplenishmentTasks.value = [];
+  }
+});
 
 const centralApprovalQueue = ref([
   { id: 'RA-20251128-018', product: 'Jogger Pants', warehouse: 'East China', quantity: 300, time: '09:20', level: 'warning', levelLabel: 'Urgent' },

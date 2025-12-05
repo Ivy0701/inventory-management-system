@@ -146,174 +146,207 @@ export const updateInventoryQuantity = async (productId, quantityChange, locatio
     // 自动为分仓库（WH-EAST, WH-WEST, WH-NORTH, WH-SOUTH）生成向总仓库的补货申请：
     // 条件：
     //   - 位置为分仓库（WH-EAST, WH-WEST, WH-NORTH, WH-SOUTH）
-    //   - 可用库存低于 300
+    //   - 可用库存低于 totalStock * 0.3（30%阈值）
     //   - 且当前没有该商品、该仓库的待处理/处理中补货申请，避免重复创建
     const regionalWarehouses = ['WH-EAST', 'WH-WEST', 'WH-NORTH', 'WH-SOUTH'];
-    if (regionalWarehouses.includes(locationId) && inventory.available < 300) {
-      const totalStock = inventory.totalStock || 900;
-      const targetStock = totalStock * 0.9;
-      const replenishQty = targetStock - inventory.available;
+    if (regionalWarehouses.includes(locationId)) {
+      const totalStock = inventory.totalStock || 200;
+      const threshold30Percent = totalStock * 0.3;
+      
+      if (inventory.available < threshold30Percent) {
+        const targetStock = totalStock * 0.9;
+        const replenishQty = Math.max(0, Math.ceil(targetStock - inventory.available));
 
-      if (replenishQty > 0) {
-        // 检查是否已有未完成的补货申请
-        const existingRequest = await ReplenishmentRequest.findOne({
-          productId: productId,
-          warehouseId: locationId,
-          status: { $in: ['PENDING', 'PROCESSING', 'APPROVED'] }
-        });
-
-        if (!existingRequest) {
-          // 创建补货预警
-          const alertId = `ALERT-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-          await ReplenishmentAlert.findOneAndUpdate(
-            { productId, warehouseId: locationId },
-            {
-              alertId,
-              productId,
-              productName: inventory.productName || productId,
-              stock: inventory.available,
-              suggested: Math.max(0, Math.ceil(targetStock - inventory.available)),
-              trigger: `Regional warehouse inventory below 300 (current: ${inventory.available})`,
-              warehouseId: locationId,
-              warehouseName: inventory.locationName || locationId,
-              level: inventory.available < 100 ? 'danger' : 'warning',
-              levelLabel: inventory.available < 100 ? 'Urgent' : 'Warning',
-              threshold: 300
-            },
-            { upsert: true, new: true }
-          );
-
-          // 自动创建补货申请
-          const genRequestId = () => {
-            const now = new Date();
-            return `REQ-${now.toISOString().slice(0, 10).replace(/-/g, '')}-${Math.floor(Math.random() * 900 + 100)}`;
-          };
-
-          const now = new Date();
-          await ReplenishmentRequest.create({
-            requestId: genRequestId(),
-            productId,
-            productName: inventory.productName || productId,
-            vendor: 'Central Warehouse',
-            quantity: replenishQty,
-            deliveryDate: new Date(now.getTime() + 3 * 24 * 3600 * 1000), // 3天后
-            remark: `Auto-request: replenish ${replenishQty} units to reach target stock of 900`,
+        if (replenishQty > 0) {
+          // 检查是否已有未完成的补货申请
+          const existingRequest = await ReplenishmentRequest.findOne({
+            productId: productId,
             warehouseId: locationId,
-            warehouseName: inventory.locationName || locationId,
-            reason: `Regional warehouse inventory below 300 (current: ${inventory.available})`,
-            status: 'PENDING',
-            progress: [
-              {
-                title: 'Replenishment Alert Generated',
-                desc: `${inventory.productName || productId} below threshold at ${inventory.locationName || locationId}`,
-                status: 'completed',
-                timestamp: now
-              },
-              {
-                title: 'Application Auto-Submitted',
-                desc: `${inventory.locationName || locationId} auto-requested ${replenishQty} units from Central Warehouse`,
-                status: 'completed',
-                timestamp: now
-              },
-              {
-                title: 'Waiting for Approval',
-                desc: 'Awaiting central approval',
-                status: 'processing',
-                timestamp: now
-              }
-            ]
+            status: { $in: ['PENDING', 'PROCESSING', 'APPROVED'] }
           });
 
-          console.log(
-            `Auto replenishment request created: productId=${productId}, warehouseId=${locationId}, quantity=${replenishQty}, currentStock=${inventory.available}`
-          );
+          if (!existingRequest) {
+            // 创建补货预警
+            const alertId = `ALERT-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+            await ReplenishmentAlert.findOneAndUpdate(
+              { productId, warehouseId: locationId },
+              {
+                alertId,
+                productId,
+                productName: inventory.productName || productId,
+                stock: inventory.available,
+                suggested: replenishQty,
+                trigger: `Regional warehouse inventory below 30% threshold (current: ${inventory.available} < ${Math.ceil(threshold30Percent)})`,
+                warehouseId: locationId,
+                warehouseName: inventory.locationName || locationId,
+                level: inventory.available < threshold30Percent * 0.5 ? 'danger' : 'warning',
+                levelLabel: inventory.available < threshold30Percent * 0.5 ? 'Urgent' : 'Warning',
+                threshold: Math.ceil(threshold30Percent),
+                shortageQty: Math.max(0, Math.ceil(threshold30Percent - inventory.available))
+              },
+              { upsert: true, new: true }
+            );
+
+            // 自动创建补货申请
+            const genRequestId = () => {
+              const now = new Date();
+              return `REQ-${now.toISOString().slice(0, 10).replace(/-/g, '')}-${Math.floor(Math.random() * 900 + 100)}`;
+            };
+
+            const now = new Date();
+            await ReplenishmentRequest.create({
+              requestId: genRequestId(),
+              productId,
+              productName: inventory.productName || productId,
+              vendor: 'Central Warehouse',
+              quantity: replenishQty,
+              deliveryDate: new Date(now.getTime() + 3 * 24 * 3600 * 1000), // 3天后
+              remark: `Auto-request: replenish ${replenishQty} units to reach target stock of ${Math.ceil(targetStock)}`,
+              warehouseId: locationId,
+              warehouseName: inventory.locationName || locationId,
+              reason: `Regional warehouse inventory below 30% threshold (current: ${inventory.available} < ${Math.ceil(threshold30Percent)})`,
+              status: 'PENDING',
+              progress: [
+                {
+                  title: 'Replenishment Alert Generated',
+                  desc: `${inventory.productName || productId} below threshold at ${inventory.locationName || locationId}`,
+                  status: 'completed',
+                  timestamp: now
+                },
+                {
+                  title: 'Application Auto-Submitted',
+                  desc: `${inventory.locationName || locationId} auto-requested ${replenishQty} units from Central Warehouse`,
+                  status: 'completed',
+                  timestamp: now
+                },
+                {
+                  title: 'Waiting for Approval',
+                  desc: 'Awaiting central approval',
+                  status: 'processing',
+                  timestamp: now
+                }
+              ]
+            });
+
+            console.log(
+              `Auto replenishment request created: productId=${productId}, warehouseId=${locationId}, quantity=${replenishQty}, currentStock=${inventory.available}`
+            );
+          }
         }
       }
     }
 
-    // 自动为华东门店1生成补货调拨单：
+    // 自动为所有门店创建低库存警报和补货调拨单：
     // 条件：
-    //   - 位置为 STORE-EAST-01（华东门店1）
-    //   - 可用库存低于 60（包括0）
-    //   - 每次触发缺货时都更新或创建调拨单，确保区域仓库能看到警告
-    if (locationId === 'STORE-EAST-01' && inventory.available < 60) {
-      const targetStock = 180;
-      const replenishQty = targetStock - inventory.available;
+    //   - 位置为门店（STORE-*）
+    //   - 可用库存低于 totalStock * 0.3（30%阈值）
+    //   - 创建 ReplenishmentAlert 以便区域仓库管理员看到
+    //   - 创建或更新调拨单，从对应的区域仓库调拨
+    const allStores = [
+      'STORE-EAST-01', 'STORE-EAST-02',
+      'STORE-WEST-01', 'STORE-WEST-02',
+      'STORE-NORTH-01', 'STORE-NORTH-02',
+      'STORE-SOUTH-01', 'STORE-SOUTH-02'
+    ];
+    
+    if (allStores.includes(locationId)) {
+      const totalStock = inventory.totalStock || 200;
+      const threshold30Percent = totalStock * 0.3;
+      
+      if (inventory.available < threshold30Percent) {
+        // 确定对应的区域仓库
+        let fromLocationId = 'WH-EAST';
+        let fromLocationName = 'East Warehouse';
+        if (locationId.startsWith('STORE-WEST')) {
+          fromLocationId = 'WH-WEST';
+          fromLocationName = 'West Warehouse';
+        } else if (locationId.startsWith('STORE-NORTH')) {
+          fromLocationId = 'WH-NORTH';
+          fromLocationName = 'North Warehouse';
+        } else if (locationId.startsWith('STORE-SOUTH')) {
+          fromLocationId = 'WH-SOUTH';
+          fromLocationName = 'South Warehouse';
+        }
+        
+        const targetStock = totalStock * 0.9;
+        const replenishQty = Math.max(0, Math.ceil(targetStock - inventory.available));
 
-      console.log(
-        `[Low Stock Alert] STORE-EAST-01: productId=${productId}, available=${inventory.available}, replenishQty=${replenishQty}`
-      );
+        console.log(
+          `[Low Stock Alert] ${locationId}: productId=${productId}, available=${inventory.available}, threshold=${Math.ceil(threshold30Percent)}, replenishQty=${replenishQty}`
+        );
 
-      if (replenishQty > 0) {
-        // 查找是否有 PENDING 状态的调拨单（可以更新）
-        const existingPendingTransfer = await TransferOrder.findOne({
-          productSku: productId,
-          toLocationId: 'STORE-EAST-01',
-          fromLocationId: 'WH-EAST',
-          status: 'PENDING'
-        });
-
-        if (existingPendingTransfer) {
-          // 如果已有 PENDING 调拨单，更新数量（取更大的值，确保能补足）
-          const newQuantity = Math.max(existingPendingTransfer.quantity, replenishQty);
-          if (newQuantity !== existingPendingTransfer.quantity) {
-            existingPendingTransfer.quantity = newQuantity;
-            existingPendingTransfer.history.push({
-              status: 'PENDING',
-              note: `Updated quantity: ${existingPendingTransfer.quantity} → ${newQuantity} units (current stock: ${inventory.available})`,
-              createdAt: new Date()
-            });
-            await existingPendingTransfer.save();
-            console.log(
-              `[Transfer Updated] transferId=${existingPendingTransfer.transferId}, productId=${productId}, quantity=${existingPendingTransfer.quantity} → ${newQuantity}`
-            );
-          } else {
-            console.log(
-              `[Transfer Exists] transferId=${existingPendingTransfer.transferId}, productId=${productId}, quantity=${existingPendingTransfer.quantity} (no update needed)`
-            );
-          }
-        } else {
-          // 如果没有 PENDING 调拨单，检查是否有 IN_TRANSIT 的
-          // 如果有 IN_TRANSIT 的，创建新的 PENDING 调拨单（因为之前的在运输中）
-          // 如果没有，创建新的 PENDING 调拨单
-          const existingInTransitTransfer = await TransferOrder.findOne({
+        // 门店缺货时，只创建调拨单，不创建 ReplenishmentAlert
+        // ReplenishmentAlert 只用于区域仓库向总仓库申请补货
+        // 创建或更新调拨单
+        if (replenishQty > 0) {
+          // 查找是否有 PENDING 状态的调拨单（可以更新）
+          const existingPendingTransfer = await TransferOrder.findOne({
             productSku: productId,
-            toLocationId: 'STORE-EAST-01',
-            fromLocationId: 'WH-EAST',
-            status: 'IN_TRANSIT'
+            toLocationId: locationId,
+            fromLocationId: fromLocationId,
+            status: 'PENDING'
           });
 
-          if (existingInTransitTransfer) {
-            console.log(
-              `[In Transit Exists] transferId=${existingInTransitTransfer.transferId}, productId=${productId}, creating new PENDING transfer`
-            );
-          }
-
-          const transferId = genTransferId();
-          await TransferOrder.create({
-            transferId,
-            productSku: productId,
-            productName: inventory.productName || productId,
-            quantity: replenishQty,
-            fromLocationId: 'WH-EAST',
-            fromLocationName: 'East Warehouse',
-            toLocationId: 'STORE-EAST-01',
-            toLocationName: inventory.locationName || 'East Store 1',
-            status: 'PENDING',
-            history: [
-              {
+          if (existingPendingTransfer) {
+            // 如果已有 PENDING 调拨单，更新数量（取更大的值，确保能补足）
+            const newQuantity = Math.max(existingPendingTransfer.quantity, replenishQty);
+            if (newQuantity !== existingPendingTransfer.quantity) {
+              existingPendingTransfer.quantity = newQuantity;
+              existingPendingTransfer.history.push({
                 status: 'PENDING',
-                note: `Auto-created transfer: replenish ${replenishQty} units for low stock at STORE-EAST-01 (current: ${inventory.available})`,
+                note: `Updated quantity: ${existingPendingTransfer.quantity} → ${newQuantity} units (current stock: ${inventory.available})`,
                 createdAt: new Date()
-              }
-            ],
-            inventoryUpdated: false,
-            requestId: null
-          });
+              });
+              await existingPendingTransfer.save();
+              console.log(
+                `[Transfer Updated] transferId=${existingPendingTransfer.transferId}, productId=${productId}, quantity=${existingPendingTransfer.quantity} → ${newQuantity}`
+              );
+            } else {
+              console.log(
+                `[Transfer Exists] transferId=${existingPendingTransfer.transferId}, productId=${productId}, quantity=${existingPendingTransfer.quantity} (no update needed)`
+              );
+            }
+          } else {
+            // 如果没有 PENDING 调拨单，检查是否有 IN_TRANSIT 的
+            const existingInTransitTransfer = await TransferOrder.findOne({
+              productSku: productId,
+              toLocationId: locationId,
+              fromLocationId: fromLocationId,
+              status: 'IN_TRANSIT'
+            });
 
-          console.log(
-            `[Transfer Created] transferId=${transferId}, productId=${productId}, from=WH-EAST, to=STORE-EAST-01, quantity=${replenishQty}, currentStock=${inventory.available}`
-          );
+            if (existingInTransitTransfer) {
+              console.log(
+                `[In Transit Exists] transferId=${existingInTransitTransfer.transferId}, productId=${productId}, creating new PENDING transfer`
+              );
+            }
+
+            const transferId = genTransferId();
+            await TransferOrder.create({
+              transferId,
+              productSku: productId,
+              productName: inventory.productName || productId,
+              quantity: replenishQty,
+              fromLocationId: fromLocationId,
+              fromLocationName: fromLocationName,
+              toLocationId: locationId,
+              toLocationName: inventory.locationName || locationId,
+              status: 'PENDING',
+              history: [
+                {
+                  status: 'PENDING',
+                  note: `Auto-created transfer: replenish ${replenishQty} units for low stock at ${locationId} (current: ${inventory.available})`,
+                  createdAt: new Date()
+                }
+              ],
+              inventoryUpdated: false,
+              requestId: null
+            });
+
+            console.log(
+              `[Transfer Created] transferId=${transferId}, productId=${productId}, from=${fromLocationId}, to=${locationId}, quantity=${replenishQty}, currentStock=${inventory.available}`
+            );
+          }
         }
       }
     }

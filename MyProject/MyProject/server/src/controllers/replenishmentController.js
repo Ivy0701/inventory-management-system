@@ -7,18 +7,46 @@ const genRequestId = () => {
   return `REQ-${now.toISOString().slice(0, 10).replace(/-/g, '')}-${Math.floor(Math.random() * 900 + 100)}`;
 };
 
-export const getReplenishmentAlerts = async (_req, res, next) => {
+export const getReplenishmentAlerts = async (req, res, next) => {
   try {
-    const alerts = await ReplenishmentAlert.find().sort({ createdAt: -1 });
+    const user = req.user;
+    let filter = {};
+    
+    // 如果是区域仓库管理员，只返回其负责仓库的警报
+    if (user && user.role === 'regionalManager' && user.assignedLocationId) {
+      filter.warehouseId = user.assignedLocationId;
+    } else if (user && user.role === 'regionalManager' && user.accessibleLocationIds && user.accessibleLocationIds.length > 0) {
+      // 如果使用 accessibleLocationIds，过滤仓库相关的警报
+      const warehouseIds = user.accessibleLocationIds.filter(id => id.startsWith('WH-'));
+      if (warehouseIds.length > 0) {
+        filter.warehouseId = { $in: warehouseIds };
+      }
+    }
+    // 中央管理员可以看到所有警报，不需要过滤
+    
+    const alerts = await ReplenishmentAlert.find(filter).sort({ createdAt: -1 });
     res.json(alerts);
   } catch (error) {
     next(error);
   }
 };
 
-export const getReplenishmentProgress = async (_req, res, next) => {
+export const getReplenishmentProgress = async (req, res, next) => {
   try {
-    const requests = await ReplenishmentRequest.find().sort({ createdAt: -1 }).limit(10);
+    const user = req.user;
+    let filter = {};
+    
+    // 如果是区域仓库管理员，只返回其负责仓库的进度
+    if (user && user.role === 'regionalManager' && user.assignedLocationId) {
+      filter.warehouseId = user.assignedLocationId;
+    } else if (user && user.role === 'regionalManager' && user.accessibleLocationIds && user.accessibleLocationIds.length > 0) {
+      const warehouseIds = user.accessibleLocationIds.filter(id => id.startsWith('WH-'));
+      if (warehouseIds.length > 0) {
+        filter.warehouseId = { $in: warehouseIds };
+      }
+    }
+    
+    const requests = await ReplenishmentRequest.find(filter).sort({ createdAt: -1 }).limit(10);
     const progress = requests
       .flatMap((req) =>
         req.progress.map((step) => ({
@@ -131,13 +159,30 @@ export const submitReplenishmentApplication = async (req, res, next) => {
 export const getReplenishmentApplications = async (req, res, next) => {
   try {
     const { status, warehouseId } = req.query;
+    const user = req.user;
     const filter = {};
+    
     if (status && status !== 'ALL') {
       filter.status = status;
     }
-    if (warehouseId) {
+    
+    // 如果是区域仓库管理员，只返回其负责仓库的申请
+    if (user && user.role === 'regionalManager') {
+      if (warehouseId) {
+        filter.warehouseId = warehouseId;
+      } else if (user.assignedLocationId) {
+        filter.warehouseId = user.assignedLocationId;
+      } else if (user.accessibleLocationIds && user.accessibleLocationIds.length > 0) {
+        const warehouseIds = user.accessibleLocationIds.filter(id => id.startsWith('WH-'));
+        if (warehouseIds.length > 0) {
+          filter.warehouseId = { $in: warehouseIds };
+        }
+      }
+    } else if (warehouseId) {
       filter.warehouseId = warehouseId;
     }
+    // 中央管理员可以看到所有申请，不需要过滤
+    
     const applications = await ReplenishmentRequest.find(filter).sort({ createdAt: -1 });
     res.json(applications);
   } catch (error) {

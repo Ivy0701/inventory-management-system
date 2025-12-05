@@ -258,13 +258,13 @@ const paymentMethods = [
   {
     id: 'alipay',
     name: 'Alipay',
-    description: '支付宝支付',
+    description: 'Alipay Payment',
     icon: '💰'
   },
   {
     id: 'wechat',
     name: 'WeChat Pay',
-    description: '微信支付',
+    description: 'WeChat Pay',
     icon: '💬'
   }
 ];
@@ -282,7 +282,7 @@ const countries = [
     name: 'China',
     phoneCode: '+86',
     cities: ['Beijing', 'Shanghai', 'Guangzhou', 'Shenzhen'],
-    states: ['Beijing', 'Shanghai', 'Guangdong', 'Xinjiang']
+    states: ['Beijing', 'Shanghai', 'Guangzhou', 'Xinjiang']
   },
   {
     code: 'HK',
@@ -381,6 +381,7 @@ const loadDefaultAddress = () => {
           phoneCode: defaultAddress.phoneCode || (defaultAddress.country === 'HK' ? '+852' : '+86'),
           phone: defaultAddress.phone,
           street: defaultAddress.street,
+          city: defaultAddress.city,
           state: defaultAddress.state,
           zipCode: defaultAddress.zipCode,
           notes: defaultAddress.notes || ''

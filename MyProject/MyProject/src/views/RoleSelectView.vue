@@ -137,7 +137,7 @@ const handleContinue = () => {
 
 .role-select__options {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(2, 1fr);
   gap: 24px;
 }
 

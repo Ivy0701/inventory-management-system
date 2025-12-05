@@ -1,7 +1,7 @@
 <template>
   <div class="inventory">
     <section class="card">
-      <h2 class="section-title">库存列表</h2>
+      <h2 class="section-title">Inventory List</h2>
       <div class="filter-bar">
         <input
           v-model="filters.sku"
@@ -97,12 +97,55 @@ import { createAlertsForLowStockItems } from '../services/replenishmentService.j
 
 const appStore = useAppStore();
 
-// 三个位置：华东仓库、华东门店1、华东门店2
-const locations = [
-  { id: 'WH-EAST', name: 'East Warehouse' },
-  { id: 'STORE-EAST-01', name: 'East Store 1' },
-  { id: 'STORE-EAST-02', name: 'East Store 2' }
-];
+// 根据用户的区域动态确定位置
+const getLocationsByRegion = () => {
+  const user = appStore.user;
+  const region = user?.region || 'EAST';
+  const assignedLocationId = user?.assignedLocationId || '';
+  
+  // 根据 assignedLocationId 或 region 确定区域
+  let regionKey = 'EAST';
+  if (assignedLocationId) {
+    if (assignedLocationId.includes('WEST')) regionKey = 'WEST';
+    else if (assignedLocationId.includes('NORTH')) regionKey = 'NORTH';
+    else if (assignedLocationId.includes('SOUTH')) regionKey = 'SOUTH';
+    else if (assignedLocationId.includes('EAST')) regionKey = 'EAST';
+  } else if (region) {
+    regionKey = region;
+  }
+  
+  const regionMap = {
+    EAST: {
+      warehouse: { id: 'WH-EAST', name: 'East Warehouse' },
+      store1: { id: 'STORE-EAST-01', name: 'East Store 1' },
+      store2: { id: 'STORE-EAST-02', name: 'East Store 2' }
+    },
+    WEST: {
+      warehouse: { id: 'WH-WEST', name: 'West Warehouse' },
+      store1: { id: 'STORE-WEST-01', name: 'West Store 1' },
+      store2: { id: 'STORE-WEST-02', name: 'West Store 2' }
+    },
+    NORTH: {
+      warehouse: { id: 'WH-NORTH', name: 'North Warehouse' },
+      store1: { id: 'STORE-NORTH-01', name: 'North Store 1' },
+      store2: { id: 'STORE-NORTH-02', name: 'North Store 2' }
+    },
+    SOUTH: {
+      warehouse: { id: 'WH-SOUTH', name: 'South Warehouse' },
+      store1: { id: 'STORE-SOUTH-01', name: 'South Store 1' },
+      store2: { id: 'STORE-SOUTH-02', name: 'South Store 2' }
+    }
+  };
+  
+  const regionConfig = regionMap[regionKey] || regionMap.EAST;
+  return [
+    regionConfig.warehouse,
+    regionConfig.store1,
+    regionConfig.store2
+  ];
+};
+
+const locations = computed(() => getLocationsByRegion());
 
 const stores = ref([]);
 
@@ -247,20 +290,26 @@ const getRestockAdvice = (quantity, threshold) => {
 const loadInventory = async () => {
   isLoading.value = true;
   try {
+    // 根据用户区域动态获取位置
+    const userLocations = locations.value;
+    const warehouseId = userLocations[0].id;
+    const store1Id = userLocations[1].id;
+    const store2Id = userLocations[2].id;
+    
     // 并行加载三个位置的库存
     const [warehouseData, store1Data, store2Data] = await Promise.all([
-      getInventoryByLocation('WH-EAST'),
-      getInventoryByLocation('STORE-EAST-01'),
-      getInventoryByLocation('STORE-EAST-02')
+      getInventoryByLocation(warehouseId),
+      getInventoryByLocation(store1Id),
+      getInventoryByLocation(store2Id)
     ]);
 
     inventory.length = 0;
 
     // 合并三个位置的数据
     const allData = [
-      ...warehouseData.map(item => ({ ...item, locationId: 'WH-EAST', locationName: 'East Warehouse' })),
-      ...store1Data.map(item => ({ ...item, locationId: 'STORE-EAST-01', locationName: 'East Store 1' })),
-      ...store2Data.map(item => ({ ...item, locationId: 'STORE-EAST-02', locationName: 'East Store 2' }))
+      ...warehouseData.map(item => ({ ...item, locationId: warehouseId, locationName: userLocations[0].name })),
+      ...store1Data.map(item => ({ ...item, locationId: store1Id, locationName: userLocations[1].name })),
+      ...store2Data.map(item => ({ ...item, locationId: store2Id, locationName: userLocations[2].name }))
     ];
 
     allData.forEach((item) => {

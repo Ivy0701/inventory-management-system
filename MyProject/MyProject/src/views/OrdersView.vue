@@ -219,7 +219,7 @@ const statusLabelMap = {
   completed: 'Completed',
   cancelled: 'Cancelled',
   returned: 'Returned',
-  after_sales_processing: '售后处理中'
+  after_sales_processing: 'After-Sales Processing'
 };
 
 const statusClassMap = {
