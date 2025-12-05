@@ -381,7 +381,6 @@ const loadDefaultAddress = () => {
           phoneCode: defaultAddress.phoneCode || (defaultAddress.country === 'HK' ? '+852' : '+86'),
           phone: defaultAddress.phone,
           street: defaultAddress.street,
-          city: defaultAddress.city,
           state: defaultAddress.state,
           zipCode: defaultAddress.zipCode,
           notes: defaultAddress.notes || ''
@@ -475,7 +474,6 @@ const submitOrder = async () => {
         phoneCode: addressForm.phoneCode,
         phone: `${addressForm.phoneCode} ${numericPhone}`,
         street: addressForm.street,
-        city: addressForm.city,
         state: addressForm.state,
         zipCode: addressForm.zipCode,
         notes: addressForm.notes || undefined

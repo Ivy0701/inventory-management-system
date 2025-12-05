@@ -43,6 +43,17 @@ const mapOrderResponse = (order) => ({
   updatedAt: order.updatedAt
 });
 
+// Helper function to get region from location ID
+const getRegionFromLocationId = (locationId) => {
+  if (!locationId) return null;
+  const upperLocationId = locationId.toUpperCase();
+  if (upperLocationId.includes('EAST')) return 'EAST';
+  if (upperLocationId.includes('WEST')) return 'WEST';
+  if (upperLocationId.includes('NORTH')) return 'NORTH';
+  if (upperLocationId.includes('SOUTH')) return 'SOUTH';
+  return null;
+};
+
 export const getOrders = async (req, res, next) => {
   try {
     const user = req.user;
@@ -54,6 +65,8 @@ export const getOrders = async (req, res, next) => {
     
     const userRole = user.role;
     const userId = user.id || user._id;
+    const userRegion = user.region;
+    const userAccessibleLocations = user.accessibleLocationIds || [];
     
     // Determine which orders to return based on user role
     let query = {};
@@ -61,8 +74,38 @@ export const getOrders = async (req, res, next) => {
     if (userRole === 'customer') {
       // Customers can only see their own orders
       query = { customerId: userId };
-    } else if (userRole === 'sales' || userRole === 'warehouse') {
-      // Sales staff and warehouse managers can see all orders
+    } else if (userRole === 'sales') {
+      // Sales staff can see all orders assigned to their region's stores
+      // 同一区域的所有门店销售员都能看到该区域的所有订单
+      if (userRegion && userRegion !== 'ALL') {
+        // 查询所有inventoryLocationId包含该region的订单
+        // 这样华西的所有4个销售员都能看到华西区域的订单
+        query = {
+          $or: [
+            { inventoryLocationId: { $regex: new RegExp(`STORE-${userRegion}`, 'i') } },
+            { inventoryLocationId: { $regex: new RegExp(`WH-${userRegion}`, 'i') } }
+          ]
+        };
+        console.log(`[Order Query] Sales user: ${user.account}, Region: ${userRegion}, Query:`, JSON.stringify(query));
+      } else {
+        // 如果没有region信息，返回空数组（不应该发生，但安全起见）
+        console.log(`[Order Query] Sales user: ${user.account}, No region found, returning empty`);
+        return res.json([]);
+      }
+    } else if (userRole === 'regionalManager') {
+      // 区域仓库管理员可以看到他们区域的订单
+      if (userRegion && userRegion !== 'ALL') {
+        query = {
+          $or: [
+            { inventoryLocationId: { $regex: new RegExp(`STORE-${userRegion}`, 'i') } },
+            { warehouseLocationId: { $regex: new RegExp(`WH-${userRegion}`, 'i') } }
+          ]
+        };
+      } else {
+        return res.json([]);
+      }
+    } else if (userRole === 'centralManager') {
+      // 总仓库管理员可以看到所有订单
       query = {};
     } else {
       // Other roles return empty array
@@ -71,6 +114,10 @@ export const getOrders = async (req, res, next) => {
     
     // Query orders
     const orders = await Order.find(query).sort({ createdAt: -1 });
+    console.log(`[Order Query] Found ${orders.length} orders for user ${user.account || user.id}, role: ${userRole}`);
+    if (orders.length > 0 && userRole === 'sales') {
+      console.log(`[Order Query] Sample order inventoryLocationId: ${orders[0].inventoryLocationId}`);
+    }
     res.json(orders.map(mapOrderResponse));
   } catch (error) {
     next(error);
@@ -87,24 +134,28 @@ const resolveInventoryLocationFromAddressAndPayment = (shippingAddress, paymentM
   }
 
   const country = shippingAddress.country;
-  const state = (shippingAddress.state || '').toLowerCase();
+  const stateRaw = shippingAddress.state || '';
+  const state = stateRaw.toLowerCase().trim();
 
   // 根据国家/省份映射到区域
   let regionKey = null;
   if (country === 'HK') {
-    // 香港归为华东
-    regionKey = 'EAST';
+    // 香港归为华南
+    regionKey = 'SOUTH';
   } else if (country === 'CN') {
-    if (state === 'shanghai') {
+    // 支持多种大小写和拼写变体
+    if (state === 'shanghai' || state.includes('shanghai')) {
       regionKey = 'EAST';
-    } else if (state === 'beijing') {
+    } else if (state === 'beijing' || state.includes('beijing')) {
       regionKey = 'NORTH';
-    } else if (state === 'guangzhou' || state === 'guangdong') {
+    } else if (state === 'guangzhou' || state === 'guangdong' || state.includes('guangzhou') || state.includes('guangdong')) {
       regionKey = 'SOUTH';
-    } else if (state === 'xinjiang') {
+    } else if (state === 'xinjiang' || state.includes('xinjiang')) {
       regionKey = 'WEST';
     }
   }
+  
+  console.log(`[Order Allocation] Country: ${country}, State (raw): "${stateRaw}", State (normalized): "${state}", Region: ${regionKey}`);
 
   // 区域到仓库 / 门店 ID 的映射
   const REGION_TO_LOCATIONS = {
@@ -186,6 +237,9 @@ export const createOrder = async (req, res, next) => {
     // - 支付宝 / 微信 → 门店1 + 对应区域仓库
     const { storeId, warehouseId } = resolveInventoryLocationFromAddressAndPayment(shippingAddress, paymentMethod);
     const inventoryLocationId = storeId || DEFAULT_STORE_LOCATION_ID;
+    
+    console.log(`[Order Creation] Shipping Address: ${shippingAddress.state}, Payment: ${paymentMethod}`);
+    console.log(`[Order Creation] Order allocated to: ${inventoryLocationId}, Warehouse: ${warehouseId || 'N/A'}`);
 
     const order = await Order.create({
       orderNumber: generateOrderNumber(),
@@ -460,14 +514,29 @@ export const shipOrder = async (req, res, next) => {
       return res.status(403).json({ message: 'Only sales staff can ship orders' });
     }
 
-    const order = await Order.findById(id);
-    if (!order) {
-      return res.status(404).json({ message: 'Order does not exist' });
-    }
+    // Use atomic operation to prevent duplicate shipping
+    // Only update if status is 'processing', ensuring only one person can ship
+    const order = await Order.findOneAndUpdate(
+      { 
+        _id: id, 
+        status: 'processing'  // Only update if status is still 'processing'
+      },
+      {
+        $set: { status: 'shipped' },
+        $push: { timeline: { title: 'Order Shipped', time: new Date() } }
+      },
+      { new: true }  // Return updated document
+    );
 
-    // Only processing orders can be shipped
-    if (order.status !== 'processing') {
-      return res.status(400).json({ message: 'Only processing orders can be shipped' });
+    if (!order) {
+      // Order not found or status is not 'processing'
+      const existingOrder = await Order.findById(id);
+      if (!existingOrder) {
+        return res.status(404).json({ message: 'Order does not exist' });
+      }
+      return res.status(400).json({ 
+        message: `Order cannot be shipped. Current status: ${existingOrder.status}. Only processing orders can be shipped.` 
+      });
     }
 
     // Decrease inventory for each item in the order
@@ -482,12 +551,13 @@ export const shipOrder = async (req, res, next) => {
       }
     } catch (inventoryError) {
       console.error('Inventory update error:', inventoryError);
+      // If inventory update fails, we should rollback the order status
+      // But for simplicity, we'll just return an error
+      // In production, you might want to use a transaction here
+      order.status = 'processing';
+      await order.save();
       return res.status(400).json({ message: inventoryError.message || 'Failed to update inventory' });
     }
-
-    order.status = 'shipped';
-    order.timeline.push({ title: 'Order Shipped', time: new Date() });
-    await order.save();
 
     res.json(mapOrderResponse(order));
   } catch (error) {

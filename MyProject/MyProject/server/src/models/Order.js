@@ -29,7 +29,7 @@ const shippingAddressSchema = new mongoose.Schema(
     country: { type: String },
     phoneCode: { type: String },
     street: { type: String, required: true },
-    city: { type: String, required: true },
+    city: { type: String },
     state: { type: String, required: true },
     zipCode: { type: String, required: true },
     notes: { type: String }

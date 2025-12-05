@@ -59,7 +59,7 @@ const defaultUsers = [
   {
     account: 'west_manager_01',
     password: '123456',
-    name: '西部仓管1',
+    name: '华西仓管1',
     role: 'regionalManager',
     assignedLocationId: 'WH-WEST',
     region: 'WEST',
@@ -68,7 +68,7 @@ const defaultUsers = [
   {
     account: 'west_manager_02',
     password: '123456',
-    name: '西部仓管2',
+    name: '华西仓管2',
     role: 'regionalManager',
     assignedLocationId: 'WH-WEST',
     region: 'WEST',
@@ -114,7 +114,7 @@ const defaultUsers = [
   {
     account: 'east_store1_sales_01',
     password: '123456',
-    name: '华东销售1',
+    name: '华东门店1店员1',
     role: 'sales',
     assignedLocationId: 'STORE-EAST-01',
     region: 'EAST',
@@ -123,7 +123,7 @@ const defaultUsers = [
   {
     account: 'east_store1_sales_02',
     password: '123456',
-    name: '华东销售2',
+    name: '华东门店1店员2',
     role: 'sales',
     assignedLocationId: 'STORE-EAST-01',
     region: 'EAST',
@@ -132,7 +132,7 @@ const defaultUsers = [
   {
     account: 'west_store1_sales_01',
     password: '123456',
-    name: '西部销售1',
+    name: '华西门店1店员1',
     role: 'sales',
     assignedLocationId: 'STORE-WEST-01',
     region: 'WEST',
@@ -141,7 +141,7 @@ const defaultUsers = [
   {
     account: 'west_store1_sales_02',
     password: '123456',
-    name: '西部销售2',
+    name: '华西门店1店员2',
     role: 'sales',
     assignedLocationId: 'STORE-WEST-01',
     region: 'WEST',
@@ -150,7 +150,7 @@ const defaultUsers = [
   {
     account: 'north_store1_sales_01',
     password: '123456',
-    name: '华北销售1',
+    name: '华北门店1店员1',
     role: 'sales',
     assignedLocationId: 'STORE-NORTH-01',
     region: 'NORTH',
@@ -159,7 +159,7 @@ const defaultUsers = [
   {
     account: 'north_store1_sales_02',
     password: '123456',
-    name: '华北销售2',
+    name: '华北门店1店员2',
     role: 'sales',
     assignedLocationId: 'STORE-NORTH-01',
     region: 'NORTH',
@@ -168,7 +168,7 @@ const defaultUsers = [
   {
     account: 'south_store1_sales_01',
     password: '123456',
-    name: '华南销售1',
+    name: '华南门店1店员1',
     role: 'sales',
     assignedLocationId: 'STORE-SOUTH-01',
     region: 'SOUTH',
@@ -177,7 +177,7 @@ const defaultUsers = [
   {
     account: 'south_store1_sales_02',
     password: '123456',
-    name: '华南销售2',
+    name: '华南门店1店员2',
     role: 'sales',
     assignedLocationId: 'STORE-SOUTH-01',
     region: 'SOUTH',
@@ -185,18 +185,18 @@ const defaultUsers = [
   },
   // East Store 2
   {
-    account: 'east_store1_sales_03',
+    account: 'east_store2_sales_01',
     password: '123456',
-    name: '华东销售3',
+    name: '华东门店2店员1',
     role: 'sales',
     assignedLocationId: 'STORE-EAST-02',
     region: 'EAST',
     accessibleLocationIds: ['STORE-EAST-02']
   },
   {
-    account: 'east_store1_sales_04',
+    account: 'east_store2_sales_02',
     password: '123456',
-    name: '华东销售4',
+    name: '华东门店2店员2',
     role: 'sales',
     assignedLocationId: 'STORE-EAST-02',
     region: 'EAST',
@@ -204,18 +204,18 @@ const defaultUsers = [
   },
   // West Store 2
   {
-    account: 'west_store1_sales_03',
+    account: 'west_store2_sales_01',
     password: '123456',
-    name: '西部销售3',
+    name: '华西门店2店员1',
     role: 'sales',
     assignedLocationId: 'STORE-WEST-02',
     region: 'WEST',
     accessibleLocationIds: ['STORE-WEST-02']
   },
   {
-    account: 'west_store1_sales_04',
+    account: 'west_store2_sales_02',
     password: '123456',
-    name: '西部销售4',
+    name: '华西门店2店员2',
     role: 'sales',
     assignedLocationId: 'STORE-WEST-02',
     region: 'WEST',
@@ -223,18 +223,18 @@ const defaultUsers = [
   },
   // North Store 2
   {
-    account: 'north_store1_sales_03',
+    account: 'north_store2_sales_01',
     password: '123456',
-    name: '华北销售3',
+    name: '华北门店2店员1',
     role: 'sales',
     assignedLocationId: 'STORE-NORTH-02',
     region: 'NORTH',
     accessibleLocationIds: ['STORE-NORTH-02']
   },
   {
-    account: 'north_store1_sales_04',
+    account: 'north_store2_sales_02',
     password: '123456',
-    name: '华北销售4',
+    name: '华北门店2店员2',
     role: 'sales',
     assignedLocationId: 'STORE-NORTH-02',
     region: 'NORTH',
@@ -242,18 +242,18 @@ const defaultUsers = [
   },
   // South Store 2
   {
-    account: 'south_store1_sales_03',
+    account: 'south_store2_sales_01',
     password: '123456',
-    name: '华南销售3',
+    name: '华南门店2店员1',
     role: 'sales',
     assignedLocationId: 'STORE-SOUTH-02',
     region: 'SOUTH',
     accessibleLocationIds: ['STORE-SOUTH-02']
   },
   {
-    account: 'south_store1_sales_04',
+    account: 'south_store2_sales_02',
     password: '123456',
-    name: '华南销售4',
+    name: '华南门店2店员2',
     role: 'sales',
     assignedLocationId: 'STORE-SOUTH-02',
     region: 'SOUTH',

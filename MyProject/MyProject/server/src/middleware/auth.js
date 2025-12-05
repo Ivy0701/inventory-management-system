@@ -16,20 +16,26 @@ export const authenticateToken = async (req, res, next) => {
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     
-    // Fetch user from database to get latest info including name
+    // Fetch user from database to get latest info including name, region, and accessibleLocationIds
     const user = await User.findById(decoded.id);
     if (user) {
       req.user = {
         id: user._id.toString(),
         account: user.account,
         name: user.name,
-        role: user.role
+        role: user.role,
+        region: user.region || null,
+        accessibleLocationIds: Array.isArray(user.accessibleLocationIds) ? user.accessibleLocationIds : [],
+        assignedLocationId: user.assignedLocationId || null
       };
     } else {
       req.user = {
         id: decoded.id,
         account: decoded.account,
-        role: decoded.role
+        role: decoded.role,
+        region: null,
+        accessibleLocationIds: [],
+        assignedLocationId: null
       };
     }
     next();

@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",
-    "init:users": "node src/scripts/initUsers.js"
+    "init:users": "node src/scripts/initUsers.js",
+    "update:usernames": "node src/scripts/updateUserNames.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

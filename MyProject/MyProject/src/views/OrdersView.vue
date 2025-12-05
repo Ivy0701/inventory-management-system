@@ -180,8 +180,9 @@
         </div>
       </div>
       <div class="orders__actions">
-        <button class="btn-primary" type="button" @click="confirmOrder">Confirm Order</button>
-        <button class="btn-secondary" type="button" @click="cancelOrder">Cancel Order</button>
+        <button v-if="selectedOrder.status === 'pending'" class="btn-primary" type="button" @click="confirmOrder">Confirm Order</button>
+        <button v-if="selectedOrder.status === 'processing'" class="btn-primary" type="button" @click="shipOrder">Ship Order</button>
+        <button v-if="['pending', 'processing'].includes(selectedOrder.status)" class="btn-secondary" type="button" @click="cancelOrder">Cancel Order</button>
         <button class="btn-secondary" type="button" @click="printOrder">Print Order</button>
       </div>
     </section>
@@ -190,7 +191,7 @@
 
 <script setup>
 import { reactive, ref, computed, onMounted, onUnmounted, watch } from 'vue';
-import { fetchOrders, createOrder as createOrderRequest, confirmOrder as confirmOrderApi, cancelOrder as cancelOrderApi } from '../services/orderService.js';
+import { fetchOrders, createOrder as createOrderRequest, confirmOrder as confirmOrderApi, cancelOrder as cancelOrderApi, shipOrder as shipOrderApi } from '../services/orderService.js';
 
 // 使用与顾客页面相同的商品数据
 const products = [
@@ -415,7 +416,6 @@ const createOrder = async () => {
         name: newOrder.customer,
         phone: '',
         street: '',
-        city: '',
         state: '',
         zipCode: '',
         notes: ''
@@ -453,16 +453,45 @@ const confirmOrder = async () => {
   }
   
   try {
-    await confirmOrderApi(selectedOrder.value.id);
+    const updatedOrder = await confirmOrderApi(selectedOrder.value.id);
     window.alert('Order confirmed!');
+    // Immediately refresh orders to get latest status
     await loadOrders();
     // Re-select order to update details
-    const updatedOrder = orders.value.find(o => o.id === selectedOrder.value.id);
-    if (updatedOrder) {
-      selectedOrder.value = updatedOrder;
+    const refreshedOrder = orders.value.find(o => o.id === selectedOrder.value.id);
+    if (refreshedOrder) {
+      selectedOrder.value = mapOrder(refreshedOrder);
     }
   } catch (error) {
     window.alert('Failed to confirm order: ' + (error.message || 'Unknown error'));
+    // Refresh anyway to ensure consistency
+    await loadOrders();
+  }
+};
+
+const shipOrder = async () => {
+  if (!selectedOrder.value) {
+    return;
+  }
+  
+  if (!window.confirm('Are you sure you want to ship this order? The order status will change to "Shipped" and inventory will be decreased.')) {
+    return;
+  }
+  
+  try {
+    const updatedOrder = await shipOrderApi(selectedOrder.value.id);
+    window.alert('Order has been shipped successfully!');
+    // Immediately refresh orders to get latest status
+    await loadOrders();
+    // Re-select order to update details
+    const refreshedOrder = orders.value.find(o => o.id === selectedOrder.value.id);
+    if (refreshedOrder) {
+      selectedOrder.value = mapOrder(refreshedOrder);
+    }
+  } catch (error) {
+    window.alert('Failed to ship order: ' + (error.message || 'Unknown error'));
+    // Refresh anyway to ensure consistency
+    await loadOrders();
   }
 };
 
@@ -476,13 +505,16 @@ const cancelOrder = async () => {
   }
   
   try {
-    await cancelOrderApi(selectedOrder.value.id);
+    const updatedOrder = await cancelOrderApi(selectedOrder.value.id);
     window.alert('Order cancelled!');
+    // Immediately refresh orders to get latest status
     await loadOrders();
     // If order is cancelled, clear selection
     selectedOrder.value = null;
   } catch (error) {
     window.alert('Failed to cancel order: ' + (error.message || 'Unknown error'));
+    // Refresh anyway to ensure consistency
+    await loadOrders();
   }
 };
 

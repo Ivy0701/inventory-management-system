@@ -8,27 +8,27 @@
 
 ### 销售员账号（门店员工）
 
-> 开发调试推荐直接使用第 1 行账号：**东部门店销售员 1**。  
+> 开发调试推荐直接使用第 1 行账号：**华东门店1店员1**。  
 > 该账号只关联 `East Store 1`，登录后可以完整体验门店销售 → 库存变动 → 自动补货 → 区域/总仓调拨的全流程。
 
 | 账号                 | 密码   | 姓名         | 角色  | 归属门店        |
 |----------------------|--------|--------------|-------|-----------------|
-| east_store1_sales_01 | 123456 | 华东销售1    | sales | East Store 1    |
-| east_store1_sales_02 | 123456 | 华东销售2    | sales | East Store 1    |
-| east_store1_sales_03 | 123456 | 华东销售3    | sales | East Store 2    |
-| east_store1_sales_04 | 123456 | 华东销售4    | sales | East Store 2    |
-| west_store1_sales_01 | 123456 | 西部销售1    | sales | West Store 1    |
-| west_store1_sales_02 | 123456 | 西部销售2    | sales | West Store 1    |
-| west_store1_sales_03 | 123456 | 西部销售3    | sales | West Store 2    |
-| west_store1_sales_04 | 123456 | 西部销售4    | sales | West Store 2    |
-| north_store1_sales_01| 123456 | 华北销售1    | sales | North Store 1   |
-| north_store1_sales_02| 123456 | 华北销售2    | sales | North Store 1   |
-| north_store1_sales_03| 123456 | 华北销售3    | sales | North Store 2   |
-| north_store1_sales_04| 123456 | 华北销售4    | sales | North Store 2   |
-| south_store1_sales_01| 123456 | 华南销售1    | sales | South Store 1   |
-| south_store1_sales_02| 123456 | 华南销售2    | sales | South Store 1   |
-| south_store1_sales_03| 123456 | 华南销售3    | sales | South Store 2   |
-| south_store1_sales_04| 123456 | 华南销售4    | sales | South Store 2   |
+| east_store1_sales_01 | 123456 | 华东门店1店员1    | sales | East Store 1    |
+| east_store1_sales_02 | 123456 | 华东门店1店员2    | sales | East Store 1    |
+| east_store2_sales_01 | 123456 | 华东门店2店员1    | sales | East Store 2    |
+| east_store2_sales_02 | 123456 | 华东门店2店员2    | sales | East Store 2    |
+| west_store1_sales_01 | 123456 | 华西门店1店员1    | sales | West Store 1    |
+| west_store1_sales_02 | 123456 | 华西门店1店员2    | sales | West Store 1    |
+| west_store2_sales_01 | 123456 | 华西门店2店员1    | sales | West Store 2    |
+| west_store2_sales_02 | 123456 | 华西门店2店员2    | sales | West Store 2    |
+| north_store1_sales_01| 123456 | 华北门店1店员1    | sales | North Store 1   |
+| north_store1_sales_02| 123456 | 华北门店1店员2    | sales | North Store 1   |
+| north_store2_sales_01| 123456 | 华北门店2店员1    | sales | North Store 2   |
+| north_store2_sales_02| 123456 | 华北门店2店员2    | sales | North Store 2   |
+| south_store1_sales_01| 123456 | 华南门店1店员1    | sales | South Store 1   |
+| south_store1_sales_02| 123456 | 华南门店1店员2    | sales | South Store 1   |
+| south_store2_sales_01| 123456 | 华南门店2店员1    | sales | South Store 2   |
+| south_store2_sales_02| 123456 | 华南门店2店员2    | sales | South Store 2   |
 
 ### 区域仓库管理员账号
 
@@ -36,8 +36,8 @@
 |-----------------|--------|--------------|-----------------|-----------------|
 | east_manager_01 | 123456 | 华东仓管1    | regionalManager | East Warehouse  |
 | east_manager_02 | 123456 | 华东仓管2    | regionalManager | East Warehouse  |
-| west_manager_01 | 123456 | 西部仓管1    | regionalManager | West Warehouse  |
-| west_manager_02 | 123456 | 西部仓管2    | regionalManager | West Warehouse  |
+| west_manager_01 | 123456 | 华西仓管1    | regionalManager | West Warehouse  |
+| west_manager_02 | 123456 | 华西仓管2    | regionalManager | West Warehouse  |
 | north_manager_01| 123456 | 华北仓管1    | regionalManager | North Warehouse |
 | north_manager_02| 123456 | 华北仓管2    | regionalManager | North Warehouse |
 | south_manager_01| 123456 | 华南仓管1    | regionalManager | South Warehouse |
@@ -52,7 +52,7 @@
 
 ## 使用说明
 
-### 1. 登录销售员账号（推荐：东部门店销售员1）
+### 1. 登录销售员账号（推荐：华东门店1店员1）
 
 1. 在首页选择"销售员"
 2. 点击"登录"按钮
@@ -157,7 +157,3 @@ A: 可以。编辑 `server/src/scripts/initDefaultUsers.js` 文件，在 `defaul
 1. 服务器是否正常运行
 2. 数据库连接是否正常
 3. 后端日志中是否有错误信息
-
-
-
-

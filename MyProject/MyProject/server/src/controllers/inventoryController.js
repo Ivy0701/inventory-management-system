@@ -70,6 +70,12 @@ export const getInventoryByLocation = async (req, res, next) => {
       return res.status(401).json({ message: 'Login required' });
     }
 
+    // 总仓库管理员可以访问所有位置
+    if (user.role === 'centralManager') {
+      const items = await Inventory.find({ locationId }).sort({ productId: 1 });
+      return res.json(items);
+    }
+
     // 简单权限：如果用户声明了 accessibleLocationIds，则只允许访问其中的仓库/门店
     if (
       Array.isArray(user.accessibleLocationIds) &&

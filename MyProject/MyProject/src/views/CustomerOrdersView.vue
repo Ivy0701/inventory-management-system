@@ -128,7 +128,7 @@
               <span>Phone: {{ selectedOrder.shippingAddress.phone }}</span>
             </div>
             <div class="list-item">
-              <span>{{ selectedOrder.shippingAddress.street }}, {{ selectedOrder.shippingAddress.city }}, {{ selectedOrder.shippingAddress.state }} {{ selectedOrder.shippingAddress.zipCode }}</span>
+              <span>{{ selectedOrder.shippingAddress.street }}{{ selectedOrder.shippingAddress.city ? `, ${selectedOrder.shippingAddress.city}` : '' }}, {{ selectedOrder.shippingAddress.state }} {{ selectedOrder.shippingAddress.zipCode }}</span>
             </div>
           </div>
         </div>
@@ -407,15 +407,18 @@ const handleShipOrder = async () => {
   isProcessing.value = true;
   try {
     const updatedOrder = await shipOrder(selectedOrder.value.id);
-    // Update the order in the list
-    const orderIndex = orders.value.findIndex(o => o.id === selectedOrder.value.id);
-    if (orderIndex !== -1) {
-      orders.value[orderIndex] = mapOrder(updatedOrder);
-      selectedOrder.value = mapOrder(updatedOrder);
+    // Immediately refresh orders to get latest status from database
+    await loadOrders();
+    // Update the selected order
+    const refreshedOrder = orders.value.find(o => o.id === selectedOrder.value.id);
+    if (refreshedOrder) {
+      selectedOrder.value = mapOrder(refreshedOrder);
     }
     window.alert('Order has been shipped successfully!');
   } catch (error) {
     window.alert('Failed to ship order: ' + (error.message || 'Unknown error'));
+    // Refresh anyway to ensure consistency
+    await loadOrders();
   } finally {
     isProcessing.value = false;
   }

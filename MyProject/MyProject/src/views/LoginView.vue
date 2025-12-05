@@ -149,36 +149,36 @@ const showPresetAccounts = computed(() => {
 
 const PRESET_ACCOUNTS = {
   sales: [
-    { account: 'east_store1_sales_01', password: '123456', name: 'East Store 1 · Sales 01' },
-    { account: 'east_store1_sales_02', password: '123456', name: 'East Store 1 · Sales 02' },
-    { account: 'east_store1_sales_03', password: '123456', name: 'East Store 2 · Sales 03' },
-    { account: 'east_store1_sales_04', password: '123456', name: 'East Store 2 · Sales 04' },
-    { account: 'west_store1_sales_01', password: '123456', name: 'West Store 1 · Sales 01' },
-    { account: 'west_store1_sales_02', password: '123456', name: 'West Store 1 · Sales 02' },
-    { account: 'west_store1_sales_03', password: '123456', name: 'West Store 2 · Sales 03' },
-    { account: 'west_store1_sales_04', password: '123456', name: 'West Store 2 · Sales 04' },
-    { account: 'north_store1_sales_01', password: '123456', name: 'North Store 1 · Sales 01' },
-    { account: 'north_store1_sales_02', password: '123456', name: 'North Store 1 · Sales 02' },
-    { account: 'north_store1_sales_03', password: '123456', name: 'North Store 2 · Sales 03' },
-    { account: 'north_store1_sales_04', password: '123456', name: 'North Store 2 · Sales 04' },
-    { account: 'south_store1_sales_01', password: '123456', name: 'South Store 1 · Sales 01' },
-    { account: 'south_store1_sales_02', password: '123456', name: 'South Store 1 · Sales 02' },
-    { account: 'south_store1_sales_03', password: '123456', name: 'South Store 2 · Sales 03' },
-    { account: 'south_store1_sales_04', password: '123456', name: 'South Store 2 · Sales 04' }
+    { account: 'east_store1_sales_01', password: '123456', name: '华东门店1店员1' },
+    { account: 'east_store1_sales_02', password: '123456', name: '华东门店1店员2' },
+    { account: 'east_store2_sales_01', password: '123456', name: '华东门店2店员1' },
+    { account: 'east_store2_sales_02', password: '123456', name: '华东门店2店员2' },
+    { account: 'west_store1_sales_01', password: '123456', name: '华西门店1店员1' },
+    { account: 'west_store1_sales_02', password: '123456', name: '华西门店1店员2' },
+    { account: 'west_store2_sales_01', password: '123456', name: '华西门店2店员1' },
+    { account: 'west_store2_sales_02', password: '123456', name: '华西门店2店员2' },
+    { account: 'north_store1_sales_01', password: '123456', name: '华北门店1店员1' },
+    { account: 'north_store1_sales_02', password: '123456', name: '华北门店1店员2' },
+    { account: 'north_store2_sales_01', password: '123456', name: '华北门店2店员1' },
+    { account: 'north_store2_sales_02', password: '123456', name: '华北门店2店员2' },
+    { account: 'south_store1_sales_01', password: '123456', name: '华南门店1店员1' },
+    { account: 'south_store1_sales_02', password: '123456', name: '华南门店1店员2' },
+    { account: 'south_store2_sales_01', password: '123456', name: '华南门店2店员1' },
+    { account: 'south_store2_sales_02', password: '123456', name: '华南门店2店员2' }
   ],
   regionalManager: [
-    { account: 'east_manager_01', password: '123456', name: 'East Warehouse · Manager 01' },
-    { account: 'east_manager_02', password: '123456', name: 'East Warehouse · Manager 02' },
-    { account: 'west_manager_01', password: '123456', name: 'West Warehouse · Manager 01' },
-    { account: 'west_manager_02', password: '123456', name: 'West Warehouse · Manager 02' },
-    { account: 'north_manager_01', password: '123456', name: 'North Warehouse · Manager 01' },
-    { account: 'north_manager_02', password: '123456', name: 'North Warehouse · Manager 02' },
-    { account: 'south_manager_01', password: '123456', name: 'South Warehouse · Manager 01' },
-    { account: 'south_manager_02', password: '123456', name: 'South Warehouse · Manager 02' }
+    { account: 'east_manager_01', password: '123456', name: '华东仓管1' },
+    { account: 'east_manager_02', password: '123456', name: '华东仓管2' },
+    { account: 'west_manager_01', password: '123456', name: '华西仓管1' },
+    { account: 'west_manager_02', password: '123456', name: '华西仓管2' },
+    { account: 'north_manager_01', password: '123456', name: '华北仓管1' },
+    { account: 'north_manager_02', password: '123456', name: '华北仓管2' },
+    { account: 'south_manager_01', password: '123456', name: '华南仓管1' },
+    { account: 'south_manager_02', password: '123456', name: '华南仓管2' }
   ],
   centralManager: [
-    { account: 'central001', password: '123456', name: 'Central Warehouse · Manager 01' },
-    { account: 'central002', password: '123456', name: 'Central Warehouse · Manager 02' }
+    { account: 'central001', password: '123456', name: '总仓库管理员1' },
+    { account: 'central002', password: '123456', name: '总仓库管理员2' }
   ]
 };
 

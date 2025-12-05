@@ -31,7 +31,7 @@
             <strong>Phone:</strong> {{ address.phone }}
           </p>
           <p class="address-card__line">
-            <strong>Address:</strong> {{ address.street }}, {{ address.city }}, {{ address.state }} {{ address.zipCode }}
+            <strong>Address:</strong> {{ address.street }}{{ address.city ? `, ${address.city}` : '' }}, {{ address.state }} {{ address.zipCode }}
           </p>
           <p v-if="address.notes" class="address-card__line">
             <strong>Notes:</strong> {{ address.notes }}
@@ -209,7 +209,6 @@ watch(
   (newCode) => {
     const found = countries.find(c => c.code === newCode);
     addressForm.phoneCode = found ? found.phoneCode : '+86';
-    addressForm.city = '';
     addressForm.state = '';
     addressForm.phone = '';
   }
@@ -241,7 +240,6 @@ const editAddress = (address) => {
     phoneCode: address.phoneCode || (address.country === 'HK' ? '+852' : '+86'),
     phone: address.phone,
     street: address.street,
-    city: address.city,
     state: address.state,
     zipCode: address.zipCode,
     notes: address.notes || '',
@@ -332,7 +330,6 @@ const closeModal = () => {
     phoneCode: '+86',
     phone: '',
     street: '',
-    city: '',
     state: '',
     zipCode: '',
     notes: '',
